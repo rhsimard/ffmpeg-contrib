@@ -496,7 +496,7 @@ static av_cold int init(AVFilterContext *ctx, const char *args, void *opaque)
 #endif
               av_free(statmsg);
          } else {
-              av_log(deshake,AV_LOG_ERROR,"Failed to open stat file %s: %s\n", filename, strerror(errno));
+              av_log(deshake,AV_LOG_ERROR,"Failed to open requested statisitics file %s: %s\n", filename, strerror(errno));
          }
     }
 

@@ -22,6 +22,8 @@
 #ifndef AVFILTER_TRANSFORM_H
 #define AVFILTER_TRANSFORM_H
 
+#include "libavutil/exper01.h"
+
 /**
  * @file
  * transform input video
@@ -112,13 +114,18 @@ void avfilter_mul_matrix(const float *m1, float scalar, float *result);
  * @param width       image width in pixels
  * @param height      image height in pixels
  * @param matrix      9-item affine transformation matrix
+ * @param default     value for pixels outside the transformed image when FILL_BLANK chosen
  * @param interpolate pixel interpolation method
  * @param fill        edge fill method
  */
 void avfilter_transform(const uint8_t *src, uint8_t *dst,
                         int src_stride, int dst_stride,
-                        int width, int height, const float *matrix,
+                        int width, int height, const float *matrix, uint8_t blank_default,
                         enum InterpolateMethod interpolate,
+#ifdef EXPER01
+                        enum FillMethod fill, DeshakeContextExtra *deshake_extra);
+#else
                         enum FillMethod fill);
+#endif
 
 #endif /* AVFILTER_TRANSFORM_H */

@@ -25,8 +25,17 @@
  */
 
 #include "libavutil/common.h"
-
 #include "transform.h"
+#include "libavutil/exper01.h"
+
+#if 0
+#  define SAFE_SUBSCRIPT(ys,xs,sstride)                                                                                                                    \
+     (((subscript = (int)(ys) * (sstride) + (int)(xs)) >= size)?                                                                                         \
+     av_log(NULL,AV_LOG_ERROR,"%s %s %d: Subscript out of range: %d  (width=%d height=%d)\n", __FILE__, __func__, __LINE__, subscript, width, height), 0 \
+      : subscript)
+#else
+#  define SAFE_SUBSCRIPT(ys,xs,sstride) ((int)(ys) * (sstride) + (int)(xs))
+#endif
 
 #define INTERPOLATE_METHOD(name) \
     static uint8_t name(float x, float y, const uint8_t *src, \
@@ -137,15 +146,28 @@ void avfilter_mul_matrix(const float *m1, float scalar, float *result)
 
 void avfilter_transform(const uint8_t *src, uint8_t *dst,
                         int src_stride, int dst_stride,
-                        int width, int height, const float *matrix,
+                        int width, int height, const float *matrix, uint8_t blank_default,
                         enum InterpolateMethod interpolate,
+#ifdef EXPER01
+                        enum FillMethod fill, DeshakeContextExtra *deshake_extra)
+#else
                         enum FillMethod fill)
+#endif
 {
-    int x, y;
+    int x, y, subscript;
+    unsigned int size = width * height;
     float x_s, y_s;
-    uint8_t def = 0;
+    uint8_t def = blank_default;
     uint8_t (*func)(float, float, const uint8_t *, int, int, int, uint8_t) = NULL;
-
+#ifdef EXPER01
+    static int fuss=5;
+    if (fuss) {
+         fuss--;
+//         av_log(NULL,AV_LOG_ERROR,"%s %s %d: (info) src_stride %d  dst_stride %d  width: %d  height: %d  matrix [%f %f %f %f %f %f %f %f %f]  src = %p  dst = %p\n",
+//                __FILE__,__func__,__LINE__,src_stride, dst_stride, width, height, matrix[0], matrix[1], matrix[2], matrix[3], matrix[4], matrix[5], matrix[6], matrix[7], matrix[8],
+//                src, dst);
+    }
+#endif
     switch(interpolate) {
         case INTERPOLATE_NEAREST:
             func = interpolate_nearest;
@@ -163,6 +185,9 @@ void avfilter_transform(const uint8_t *src, uint8_t *dst,
             x_s = x * matrix[0] + y * matrix[1] + matrix[2];
             y_s = x * matrix[3] + y * matrix[4] + matrix[5];
 
+#if 0
+            av_log(NULL,AV_LOG_ERROR,"x_s %f  y_s %f\n", x_s, y_s);
+#endif
             switch(fill) {
                 case FILL_ORIGINAL:
                     def = src[y * src_stride + x];
@@ -170,15 +195,20 @@ void avfilter_transform(const uint8_t *src, uint8_t *dst,
                 case FILL_CLAMP:
                     y_s = av_clipf(y_s, 0, height - 1);
                     x_s = av_clipf(x_s, 0, width - 1);
-                    def = src[(int)y_s * src_stride + (int)x_s];
+                    def = src[SAFE_SUBSCRIPT(y_s, x_s, src_stride)];
                     break;
                 case FILL_MIRROR:
                     y_s = (y_s < 0) ? -y_s : (y_s >= height) ? (height + height - y_s) : y_s;
                     x_s = (x_s < 0) ? -x_s : (x_s >= width) ? (width + width - x_s) : x_s;
-                    def = src[(int)y_s * src_stride + (int)x_s];
+                    def = src[SAFE_SUBSCRIPT(y_s, x_s, src_stride)];
+                    break;
             }
 
-            dst[y * dst_stride + x] = func(x_s, y_s, src, width, height, src_stride, def);
+            if (deshake_extra->optmask & 0x1) {
+                 dst[y * dst_stride + x] = src[y * src_stride + x];  // Null transform; just copy.
+            } else {
+                 dst[y * dst_stride + x] = func(x_s, y_s, src, width, height, src_stride, def);
+            }
         }
     }
 }

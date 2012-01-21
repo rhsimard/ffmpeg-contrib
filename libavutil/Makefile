@@ -36,6 +36,7 @@ HEADERS = adler32.h                                                     \
           rational.h                                                    \
           samplefmt.h                                                   \
           sha.h                                                         \
+	  exper01.h
 
 BUILT_HEADERS = avconfig.h
 
@@ -72,6 +73,7 @@ OBJS = adler32.o                                                        \
        sha.o                                                            \
        tree.o                                                           \
        utils.o                                                          \
+       exper01.o
 
 OBJS-$(ARCH_ARM) += arm/cpu.o
 OBJS-$(ARCH_PPC) += ppc/cpu.o

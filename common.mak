@@ -41,6 +41,9 @@ COMPILE_C = $(call COMPILE,CC)
 COMPILE_CXX = $(call COMPILE,CXX)
 COMPILE_S = $(call COMPILE,AS)
 
+%.E: %.c
+	$(CC) $(CPPFLAGS) $(CFLAGS) -E $<
+
 %.o: %.c
 	$(COMPILE_C)
 

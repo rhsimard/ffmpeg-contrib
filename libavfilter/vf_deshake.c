@@ -294,12 +294,15 @@ static double block_angle(int x, int y, int cx, int cy, IntMotionVector *shift)
  * move one pixel to the right and two pixels down, this would yield a
  * motion vector (1, -2).
  */
+#define COUNTS_SIZE_X (128)
+#define COUNTS_SIZE_Y (128)
+
 static void find_motion(DeshakeContext *deshake, uint8_t *src1, uint8_t *src2,
                         int width, int height, int stride, Transform *t)
 {
     int x, y;
     IntMotionVector mv = {0, 0};
-    int counts[128][128];
+    int counts[COUNTS_SIZE_X][COUNTS_SIZE_Y] = {{0}};
     int count_max_value = 0;
     int contrast;
 #ifdef EXPER01
@@ -316,13 +319,6 @@ static void find_motion(DeshakeContext *deshake, uint8_t *src1, uint8_t *src2,
 #ifdef EXPER01
     DESHAKE_WINNING_COUNT = -1;
 #endif
-
-    // Reset counts to zero
-    for (x = 0; x < deshake->rx * 2 + 1; x++) {
-        for (y = 0; y < deshake->ry * 2 + 1; y++) {
-            counts[x][y] = 0;
-        }
-    }
 
     pos = 0;
     // Find motion for every block and store the motion vector in the counts
@@ -471,7 +467,7 @@ static av_cold int init(AVFilterContext *ctx, const char *args, void *opaque)
         sscanf(args, "%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%Li:%255s",
                &deshake->cx, &deshake->cy, &deshake->cw, &deshake->ch,
                &deshake->rx, &deshake->ry, (int *)&deshake->edge,
-               &deshake->blocksize, &deshake->contrast, (int *)&deshake->search, &DESHAKE_ZOOM, &deshake->extra.optmask, filename);
+               &deshake->blocksize, &deshake->contrast, (int *)&deshake->search, &DESHAKE_ZOOM, (long long int*)&deshake->extra.optmask, filename);
         global_option_01 = (OPTMASK(OPT_GLOBAL_01));
         global_option_02 = (OPTMASK(OPT_GLOBAL_02));
 #else

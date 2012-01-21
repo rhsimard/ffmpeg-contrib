@@ -63,6 +63,23 @@
 #include "libavutil/exper01.h"     // EXPER01
 
 
+// Parameter limits per man page
+#define RX_MAX             (64)
+#define RX_MIN             (0)
+#define RX_DEFAULT         (16)
+#define RY_MAX             (64)
+#define RY_MIN             (0)
+#define RY_DEFAULT         (16)
+#define BLOCKSIZE_MAX      (128)
+// Note: man page says this is 4, but in the existing code it's 8.  Staying with the code for now.
+#define BLOCKSIZE_MIN      (8)
+#define BLOCKSIZE_DEFAULT  (8)
+#define CONTRAST_MAX       (255)
+#define CONTRAST_MIN       (1)
+#define CONTRAST_DEFAULT   (125)
+#define SEARCH_DEFAULT     (EXHAUSTIVE)
+
+
 #define CHROMA_WIDTH(link)  -((-link->w) >> av_pix_fmt_descriptors[link->format].log2_chroma_w)
 #define CHROMA_HEIGHT(link) -((-link->h) >> av_pix_fmt_descriptors[link->format].log2_chroma_h)
 
@@ -446,13 +463,12 @@ static av_cold int init(AVFilterContext *ctx, const char *args, void *opaque)
     int i, nopts = 0;
     OptmaskSelection *osp;
 #endif
-    deshake->rx = 16;
-    deshake->ry = 16;
+    deshake->rx = RX_DEFAULT;
+    deshake->ry = RY_DEFAULT;
     deshake->edge = FILL_MIRROR;
-    deshake->blocksize = 8;
-    deshake->contrast = 125;
-    deshake->search = EXHAUSTIVE;
-    deshake->refcount = 20;
+    deshake->blocksize = BLOCKSIZE_DEFAULT;
+    deshake->contrast = CONTRAST_DEFAULT;
+    deshake->search = SEARCH_DEFAULT;
 
     deshake->cw = -1;
     deshake->ch = -1;
@@ -477,12 +493,12 @@ static av_cold int init(AVFilterContext *ctx, const char *args, void *opaque)
                &deshake->blocksize, &deshake->contrast, (int *)&deshake->search, filename);
 #endif
 
-        deshake->blocksize = av_clip(deshake->blocksize, 4, 128);
+        deshake->blocksize = av_clip(deshake->blocksize, BLOCKSIZE_MIN, BLOCKSIZE_MAX);
         deshake->blocksize /= 2;
-        deshake->rx = av_clip(deshake->rx, 0, 64);
-        deshake->ry = av_clip(deshake->ry, 0, 64);
+        deshake->rx = av_clip(deshake->rx, RX_MIN, RX_MAX);
+        deshake->ry = av_clip(deshake->ry, RY_MIN, RY_MAX);
         deshake->edge = av_clip(deshake->edge, FILL_BLANK, FILL_COUNT - 1);
-        deshake->contrast = av_clip(deshake->contrast, 1, 255);
+        deshake->contrast = av_clip(deshake->contrast, CONTRAST_MIN, CONTRAST_MAX);
         deshake->search = av_clip(deshake->search, EXHAUSTIVE, SEARCH_COUNT - 1);
 
     }

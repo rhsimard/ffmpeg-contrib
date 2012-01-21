@@ -24,14 +24,14 @@
  */
 
 #include "avfilter.h"
-
+static int recursion = 0;
 static void start_frame(AVFilterLink *inlink, AVFilterBufferRef *picref)
 {
-    avfilter_start_frame(inlink->dst->outputs[0],
+     if (++recursion > 30) { av_log(NULL,AV_LOG_ERROR,"%s %d: recursion = %d\n", __func__,__LINE__, recursion); if (recursion > 100)av_abort(); } avfilter_start_frame(inlink->dst->outputs[0],
                          avfilter_ref_buffer(picref, ~AV_PERM_WRITE));
-    avfilter_start_frame(inlink->dst->outputs[1],
+     if (recursion > 30) { av_log(NULL,AV_LOG_ERROR,"%s %d: recursion = %d\n", __func__,__LINE__, recursion); }  avfilter_start_frame(inlink->dst->outputs[1],
                          avfilter_ref_buffer(picref, ~AV_PERM_WRITE));
-}
+     if (--recursion > 30) {          av_log(NULL,AV_LOG_ERROR,"%s %d: recursion = %d\n", __func__,__LINE__, recursion);     }       }
 
 static void draw_slice(AVFilterLink *inlink, int y, int h, int slice_dir)
 {

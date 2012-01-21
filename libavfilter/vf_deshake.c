@@ -430,7 +430,7 @@ static void find_motion(DeshakeContext *deshake, uint8_t *src1, uint8_t *src2,
     av_free(angles);
 #ifdef EXPER01
     if (OPTMASK(OPT_LOG_BLOCK_VECTORS_LOOP_FINAL)) {
-         av_log(deshake,AV_LOG_ERROR,"\n%s %d: (Winner so far: count=%d: x=%d y=%d) %f %f %f %d %d %d %f %f\n",__func__,__LINE__,DESHAKE_WINNING_COUNT, DESHAKE_WINNING_MV.x, DESHAKE_WINNING_MV.y,
+         av_log(deshake,AV_LOG_ERROR,"\n%s %d: (Winner: count=%d: x=%d y=%d) %f %f %f %d %d %d %f %f\n",__func__,__LINE__,DESHAKE_WINNING_COUNT, DESHAKE_WINNING_MV.x, DESHAKE_WINNING_MV.y,
                 t->vector.x,t->vector.y,t->angle, pos, center_x, center_y, p_x, p_y);
     }
 #endif

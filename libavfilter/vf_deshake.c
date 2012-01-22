@@ -78,7 +78,8 @@
 #define CONTRAST_MIN       (1)
 #define CONTRAST_DEFAULT   (125)
 #define SEARCH_DEFAULT     (EXHAUSTIVE)
-
+#define ALPHA_MAX          (0.99)
+#define ALPHA_DEFAULT      (-1.0)
 
 #define CHROMA_WIDTH(link)  -((-link->w) >> av_pix_fmt_descriptors[link->format].log2_chroma_w)
 #define CHROMA_HEIGHT(link) -((-link->h) >> av_pix_fmt_descriptors[link->format].log2_chroma_h)
@@ -115,6 +116,14 @@ typedef struct {
           dest.zoom     op src.zoom;            \
      } while(0)
 
+#define T_SET(dest,op,val)                      \
+     do {                                       \
+          dest.vector.x op val;                 \
+          dest.vector.y op val;                 \
+          dest.angle    op val;                 \
+          dest.zoom     op val;                 \
+     } while(0)
+
 typedef struct {
     AVClass av_class;
     AVFilterBufferRef *ref;    ///< Previous frame
@@ -127,7 +136,7 @@ typedef struct {
     AVCodecContext *avctx;
     DSPContext c;              ///< Context providing optimized SAD methods
     Transform avg, last;       ///< Transforms: running average and last frame
-    int refcount;              ///< Number of reference frames (defines averaging window)
+    int reference_frames;              ///< Number of reference frames (defines averaging window)
     FILE *fp;
     int cw;                    ///< Crop motion search to this box
     int ch;
@@ -168,6 +177,53 @@ static double clean_mean(double *values, int count)
     }
 
     return mean / (count - cut * 2);
+}
+
+/**
+ * Find the contrast of a given block. When searching for global motion we
+ * really only care about the high contrast blocks, so using this method we
+ * can actually skip blocks we don't care much about.
+ */
+#ifdef EXPER01
+static int block_contrast(uint8_t *src, int x, int y, int stride, int blocksize, DeshakeContext *deshake)
+#else
+static int block_contrast(uint8_t *src, int x, int y, int stride, int blocksize, DeshakeContext)
+#endif
+{
+    int highest = 0;
+    int lowest = 0;
+    int i, j, pos;
+
+    for (i = 0; i <= blocksize * 2; i++) {
+        // We use a width of 16 here to match the libavcodec sad functions
+        for (j = 0; i <= 15; i++) {
+            pos = (y - i) * stride + (x - j);
+            if (src[pos] < lowest)
+                lowest = src[pos];
+            else if (src[pos] > highest) {
+                highest = src[pos];
+            }
+        }
+    }
+
+    return highest - lowest;
+}
+
+/**
+ * Find the rotation for a given block.
+ */
+static double block_angle(int x, int y, int cx, int cy, IntMotionVector *shift)
+{
+    double a1, a2, diff;
+
+    a1 = atan2(y - cy, x - cx);
+    a2 = atan2(y - cy + shift->y, x - cx + shift->x);
+
+    diff = a2 - a1;
+
+    return (diff > M_PI)  ? diff - 2 * M_PI :
+           (diff < -M_PI) ? diff + 2 * M_PI :
+           diff;
 }
 
 /**
@@ -254,54 +310,11 @@ static void find_block_motion(DeshakeContext *deshake, uint8_t *src1,
         mv->y = -1;
     }
     emms_c();
-    //av_log(NULL, AV_LOG_ERROR, "%s %d: Final: smallest = %d  mv->x = %d  mv->y = %d\n", __func__, __LINE__, smallest, mv->x, mv->y);
-}
-
-/**
- * Find the contrast of a given block. When searching for global motion we
- * really only care about the high contrast blocks, so using this method we
- * can actually skip blocks we don't care much about.
- */
 #ifdef EXPER01
-static int block_contrast(uint8_t *src, int x, int y, int stride, int blocksize, DeshakeContext *deshake)
-#else
-static int block_contrast(uint8_t *src, int x, int y, int stride, int blocksize, DeshakeContext)
-#endif
-{
-    int highest = 0;
-    int lowest = 0;
-    int i, j, pos;
-
-    for (i = 0; i <= blocksize * 2; i++) {
-        // We use a width of 16 here to match the libavcodec sad functions
-        for (j = 0; i <= 15; i++) {
-            pos = (y - i) * stride + (x - j);
-            if (src[pos] < lowest)
-                lowest = src[pos];
-            else if (src[pos] > highest) {
-                highest = src[pos];
-            }
-        }
+    if (OPTMASK(OPT_LOG_FIND_BLOCK_MOTION_FINAL)) {
+    av_log(NULL, AV_LOG_ERROR, "%s %d: Final: smallest =%4d  mv->x =%4d  mv->y =%4d\n", __func__, __LINE__, smallest, mv->x, mv->y);
     }
-
-    return highest - lowest;
-}
-
-/**
- * Find the rotation for a given block.
- */
-static double block_angle(int x, int y, int cx, int cy, IntMotionVector *shift)
-{
-    double a1, a2, diff;
-
-    a1 = atan2(y - cy, x - cx);
-    a2 = atan2(y - cy + shift->y, x - cx + shift->x);
-
-    diff = a2 - a1;
-
-    return (diff > M_PI)  ? diff - 2 * M_PI :
-           (diff < -M_PI) ? diff + 2 * M_PI :
-           diff;
+#endif
 }
 
 /**
@@ -324,6 +337,7 @@ static void find_motion(DeshakeContext *deshake, uint8_t *src1, uint8_t *src2,
     int contrast;
 #ifdef EXPER01
     int arrow_index;
+    double pre_clip_x, pre_clip_y;
     ArrowAnnotation *arrow, **a2;
     unsigned long counter = 0;
 #endif
@@ -436,9 +450,12 @@ static void find_motion(DeshakeContext *deshake, uint8_t *src1, uint8_t *src2,
     }
     p_x = (center_x - width / 2);
     p_y = (center_y - height / 2);
-    t->vector.x += (cos(t->angle)-1)*p_x  - sin(t->angle)*p_y;
-    t->vector.y += sin(t->angle)*p_x  + (cos(t->angle)-1)*p_y;
-
+    t->vector.x += (cos(t->angle)-1)*p_x  -  sin(t->angle)   *p_y;
+    t->vector.y +=  sin(t->angle)   *p_x  + (cos(t->angle)-1)*p_y;
+#ifdef EXPER01
+    pre_clip_x = t->vector.x;
+    pre_clip_y = t->vector.y;
+#endif
     // Clamp max shift & rotation?
     t->vector.x = av_clipf(t->vector.x, -deshake->rx * 2, deshake->rx * 2);
     t->vector.y = av_clipf(t->vector.y, -deshake->ry * 2, deshake->ry * 2);
@@ -446,145 +463,11 @@ static void find_motion(DeshakeContext *deshake, uint8_t *src1, uint8_t *src2,
 
     av_free(angles);
 #ifdef EXPER01
-    if (OPTMASK(OPT_LOG_BLOCK_VECTORS_LOOP_FINAL)) {
-         av_log(deshake,AV_LOG_ERROR,"\n%s %d: (Winner: count=%d: x=%d y=%d) %f %f %f %d %d %d %f %f\n",__func__,__LINE__,DESHAKE_WINNING_COUNT, DESHAKE_WINNING_MV.x, DESHAKE_WINNING_MV.y,
-                t->vector.x,t->vector.y,t->angle, pos, center_x, center_y, p_x, p_y);
+    if (OPTMASK(OPT_LOG_FIND_MOTION_FINAL)) {
+         av_log(deshake,AV_LOG_ERROR,"%s %d: (Winner: count =%5d: x =%4d y =%4d) t->vector: { %8.3f %8.3f %8.3f } (pre-clip x and y: %8.3f %8.3f)  pos =%4d   center_x =%4d   center_y =%4d  px =%8.3f  py =%8.3f\n",__func__,__LINE__,DESHAKE_WINNING_COUNT, DESHAKE_WINNING_MV.x, DESHAKE_WINNING_MV.y,
+                t->vector.x,t->vector.y,t->angle, pre_clip_x, pre_clip_y,  pos, center_x, center_y, p_x, p_y);
     }
 #endif
-}
-
-static av_cold int init(AVFilterContext *ctx, const char *args, void *opaque)
-{
-    DeshakeContext *deshake = ctx->priv;
-    char filename[256] = {0};
-    char *statmsg;
-#ifdef EXPER01
-    u_int32_t *p_32_01, *p_32_02, *p_32_03;
-    int i, nopts = 0;
-    OptmaskSelection *osp;
-#endif
-    deshake->rx = RX_DEFAULT;
-    deshake->ry = RY_DEFAULT;
-    deshake->edge = FILL_MIRROR;
-    deshake->blocksize = BLOCKSIZE_DEFAULT;
-    deshake->contrast = CONTRAST_DEFAULT;
-    deshake->search = SEARCH_DEFAULT;
-
-    deshake->cw = -1;
-    deshake->ch = -1;
-    deshake->cx = -1;
-    deshake->cy = -1;
-#ifdef EXPER01
-    memset(&deshake->extra,0,sizeof(deshake->extra));
-#endif
-
-    if (args) {
-#ifdef EXPER01
-        sscanf(args, "%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%Li:%255s",
-               &deshake->cx, &deshake->cy, &deshake->cw, &deshake->ch,
-               &deshake->rx, &deshake->ry, (int *)&deshake->edge,
-               &deshake->blocksize, &deshake->contrast, (int *)&deshake->search, &DESHAKE_ZOOM, (long long int*)&deshake->extra.optmask, filename);
-        global_option_01 = (OPTMASK(OPT_GLOBAL_01));
-        global_option_02 = (OPTMASK(OPT_GLOBAL_02));
-#else
-        sscanf(args, "%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%255s",
-               &deshake->cx, &deshake->cy, &deshake->cw, &deshake->ch,
-               &deshake->rx, &deshake->ry, (int *)&deshake->edge,
-               &deshake->blocksize, &deshake->contrast, (int *)&deshake->search, filename);
-#endif
-
-        deshake->blocksize = av_clip(deshake->blocksize, BLOCKSIZE_MIN, BLOCKSIZE_MAX);
-        deshake->blocksize /= 2;
-        deshake->rx = av_clip(deshake->rx, RX_MIN, RX_MAX);
-        deshake->ry = av_clip(deshake->ry, RY_MIN, RY_MAX);
-        deshake->edge = av_clip(deshake->edge, FILL_BLANK, FILL_COUNT - 1);
-        deshake->contrast = av_clip(deshake->contrast, CONTRAST_MIN, CONTRAST_MAX);
-        deshake->search = av_clip(deshake->search, EXHAUSTIVE, SEARCH_COUNT - 1);
-
-    }
-    if (*filename) {
-         if ((deshake->fp = fopen(filename, "w")) != NULL) {
-              statmsg = av_asprintf("          %12s  %12s  %12s    %12s  %12s  %12s    %12s  %12s  %12s    %12s  %12s  %12s\n\n",
-                                    "Orig x", "Avg x", "Final x", "Orig y", "Avg y", "Final y", "Orig angle", "Avg angle", "Final angle", "Orig zoom", "Avg zoom", "Final zoom");
-              fwrite(statmsg, sizeof(char), strlen(statmsg), deshake->fp);
-#ifdef EXPER01
-              fflush(deshake->fp);
-#endif
-              av_free(statmsg);
-         } else {
-              av_log(deshake,AV_LOG_ERROR,"Failed to open stat file %s: %s\n", filename, strerror(errno));
-         }
-    }
-
-    // Quadword align left edge of box for MMX code; adjust width if necessary
-    // to keep right margin
-    if (deshake->cx > 0) {
-        deshake->cw += deshake->cx - (deshake->cx & ~15);
-        deshake->cx &= ~15;
-    }
-
-#ifdef EXPER01
-    p_32_01 = (u_int32_t*)&deshake->extra.optmask;
-    av_log(ctx, AV_LOG_INFO, "cx: %d, cy: %d, cw: %d, ch: %d, rx: %d, ry: %d, edge: %d blocksize: %d contrast: %d search: %d  zoom: %d  option mask: 0x%08lx %08lx%s%s\n",
-           deshake->cx, deshake->cy, deshake->cw, deshake->ch,
-           deshake->rx, deshake->ry, deshake->edge, deshake->blocksize * 2, deshake->contrast, deshake->search, DESHAKE_ZOOM,
-           (unsigned long)p_32_01[1], (unsigned long)p_32_01[0], (*filename? "  log file: " : " oh "), (*filename? filename : " no "));
-    if (deshake->extra.optmask) {
-         av_log(NULL,AV_LOG_VERBOSE,"Enabled deshake options: ");
-         for (i = 0 ; i < get_n_optmask_selections() ; i++) {
-              osp = &optmask_selections[i];
-              if (deshake->extra.optmask & osp->mask) {
-                   av_log(NULL,AV_LOG_VERBOSE,"%s%s",(nopts? ", " : ""), osp->shortdescr);
-                   nopts++;
-              }
-         }
-         av_log(NULL,AV_LOG_VERBOSE,"\n");
-    }
-#else
-    av_log(ctx, AV_LOG_INFO, "cx: %d, cy: %d, cw: %d, ch: %d, rx: %d, ry: %d, edge: %d blocksize: %d contrast: %d search: %d  %s\n",
-           deshake->cx, deshake->cy, deshake->cw, deshake->ch,
-           deshake->rx, deshake->ry, deshake->edge, deshake->blocksize * 2, deshake->contrast, deshake->search, (*filename? filename : ""));
-#endif
-
-    return 0;
-}
-
-static int query_formats(AVFilterContext *ctx)
-{
-    enum PixelFormat pix_fmts[] = {
-        PIX_FMT_YUV420P,  PIX_FMT_YUV422P,  PIX_FMT_YUV444P,  PIX_FMT_YUV410P,
-        PIX_FMT_YUV411P,  PIX_FMT_YUV440P,  PIX_FMT_YUVJ420P, PIX_FMT_YUVJ422P,
-        PIX_FMT_YUVJ444P, PIX_FMT_YUVJ440P, PIX_FMT_NONE
-    };
-
-    avfilter_set_common_pixel_formats(ctx, avfilter_make_format_list(pix_fmts));
-
-    return 0;
-}
-
-static int config_props(AVFilterLink *link)
-{
-    DeshakeContext *deshake = link->dst->priv;
-
-    deshake->ref = NULL;
-    deshake->last.vector.x = 0;
-    deshake->last.vector.y = 0;
-    deshake->last.angle = 0;
-    deshake->last.zoom = 0;
-
-    deshake->avctx = avcodec_alloc_context3(NULL);
-    dsputil_init(&deshake->c, deshake->avctx);
-
-    return 0;
-}
-
-static av_cold void uninit(AVFilterContext *ctx)
-{
-    DeshakeContext *deshake = ctx->priv;
-
-    avfilter_unref_buffer(deshake->ref);
-    if (deshake->fp)
-        fclose(deshake->fp);
 }
 
 static void end_frame(AVFilterLink *link)
@@ -596,25 +479,31 @@ static void end_frame(AVFilterLink *link)
     uint8_t *src1, *src2;
     Transform t = {{0},0}, orig = {{0},0};
     float matrix[9];
-    float alpha = 2.0 / deshake->refcount;
+    float alpha;
     char *statmsg;
 
 #ifdef EXPER01
     int x, y;
     MotionVector start, end;  // For arrows.
-    static int maxfuss = 5;
     u_int32_t  *p_32_01, *p_32_02, *p_32_03;
     if (DESHAKE_ZOOM >= 0)
          t.zoom = orig.zoom = DESHAKE_ZOOM;
+    static int fuss = 0;
+    static int maxfuss = 5;
     if (maxfuss && link != NULL && link->dstpad != NULL) {
 //         av_log(deshake,AV_LOG_ERROR,"%s %s %d: end_frame in link is at %p\n", __FILE__,__func__,__LINE__,link->dstpad->end_frame);
          maxfuss--;
     }
 #endif
 
-    src1 = (deshake->ref == NULL) ? in->data[0] : deshake->ref->data[0];
-    src2 = in->data[0];
+    src1  = (deshake->ref == NULL) ? in->data[0] : deshake->ref->data[0];
+    src2  = in->data[0];
+    alpha = (DESHAKE_ALPHA > 0)? DESHAKE_ALPHA : (deshake->reference_frames)? 2.0 / deshake->reference_frames : 0.5;
 
+    if (!fuss) {
+         av_log(deshake,AV_LOG_DEBUG,"%s %d: alpha =%4.2f  reference_frames = %d  deshake->ref =%p\n", __func__,__LINE__,alpha,deshake->reference_frames, deshake->ref);
+         fuss++;
+    }
     if (deshake->cx < 0 || deshake->cy < 0 || deshake->cw < 0 || deshake->ch < 0) {
          // Find the most likely global motion for the current frame
          find_motion(deshake, src1, in->data[0], link->w, link->h, in->linesize[0], &t);
@@ -633,6 +522,7 @@ static void end_frame(AVFilterLink *link)
 
         find_motion(deshake, src1, src2, deshake->cw, deshake->ch, in->linesize[0], &t);
     }
+
     orig = t;   // Copy transform so we can output it later to compare to the smoothed value
 
 #ifdef EXPER01
@@ -660,12 +550,7 @@ static void end_frame(AVFilterLink *link)
     }
 #endif
     T_OP(t,-=,deshake->avg);  // Remove the average from the current motion to detect the motion that is not on purpose, just as jitter from bumping the camera
-//    t.vector.x -= deshake->avg.vector.x;
-//    t.vector.y -= deshake->avg.vector.y;
-//    t.angle -= deshake->avg.angle;
-//    t.zoom -= deshake->avg.zoom;
 
-    // Invert the motion to undo it
     t.vector.x *= -1;
     t.vector.y *= -1;
     t.angle *= -1;
@@ -683,10 +568,6 @@ static void end_frame(AVFilterLink *link)
     }
 
     T_OP(t,+=,deshake->last); // Turn relative current frame motion into absolute by adding it to the last absolute motion
-//    t.vector.x += deshake->last.vector.x;
-//    t.vector.y += deshake->last.vector.y;
-//    t.angle += deshake->last.angle;
-//    t.zoom += deshake->last.zoom;
 
     // Shrink motion by 10% to keep things centered in the camera frame
     t.vector.x *= 0.9;
@@ -694,10 +575,6 @@ static void end_frame(AVFilterLink *link)
     t.angle *= 0.9;
 
     deshake->last = t;  // Store the last absolute motion information
-//    deshake->last.vector.x = t.vector.x;
-//    deshake->last.vector.y = t.vector.y;
-//    deshake->last.angle = t.angle;
-//    deshake->last.zoom = t.zoom;
 
     // Generate a luma transformation matrix
     avfilter_get_matrix(t.vector.x, t.vector.y, t.angle, 1.0 + t.zoom / 100.0, matrix);
@@ -828,6 +705,147 @@ static void draw_vectors_r(DeshakeContext *deshake, const ArrowAnnotation *root,
           av_free(root);
      }
 }
+
+static av_cold int init(AVFilterContext *ctx, const char *args, void *opaque)
+{
+    DeshakeContext *deshake = ctx->priv;
+    char filename[256] = {0};
+    char *statmsg;
+#ifdef EXPER01
+    u_int32_t *p_32_01, *p_32_02, *p_32_03;
+    int i, nopts = 0;
+    OptmaskSelection *osp;
+#endif
+    deshake->rx = RX_DEFAULT;
+    deshake->ry = RY_DEFAULT;
+    deshake->edge = FILL_MIRROR;
+    deshake->blocksize = BLOCKSIZE_DEFAULT;
+    deshake->contrast = CONTRAST_DEFAULT;
+    deshake->search = SEARCH_DEFAULT;
+    deshake->reference_frames = 20;
+
+    deshake->cw = -1;
+    deshake->ch = -1;
+    deshake->cx = -1;
+    deshake->cy = -1;
+#ifdef EXPER01
+    memset(&deshake->extra,0,sizeof(deshake->extra));
+    deshake->extra.alpha = ALPHA_DEFAULT;
+#endif
+
+    if (args) {
+#ifdef EXPER01
+        sscanf(args, "%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%Li:%f:%255s",
+               &deshake->cx, &deshake->cy, &deshake->cw, &deshake->ch,
+               &deshake->rx, &deshake->ry, (int *)&deshake->edge,
+               &deshake->blocksize, &deshake->contrast, (int *)&deshake->search, &DESHAKE_ZOOM, (long long int*)&deshake->extra.optmask, &DESHAKE_ALPHA, filename);
+        if (DESHAKE_ALPHA >= 0) {
+             DESHAKE_ALPHA = av_clipf(DESHAKE_ALPHA,0.01,0.99);
+        }
+        global_option_01 = (OPTMASK(OPT_GLOBAL_01));
+        global_option_02 = (OPTMASK(OPT_GLOBAL_02));
+#else
+        sscanf(args, "%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%255s",
+               &deshake->cx, &deshake->cy, &deshake->cw, &deshake->ch,
+               &deshake->rx, &deshake->ry, (int *)&deshake->edge,
+               &deshake->blocksize, &deshake->contrast, (int *)&deshake->search, filename);
+#endif
+
+        deshake->blocksize = av_clip(deshake->blocksize, BLOCKSIZE_MIN, BLOCKSIZE_MAX);
+        deshake->blocksize /= 2;
+        deshake->rx = av_clip(deshake->rx, RX_MIN, RX_MAX);
+        deshake->ry = av_clip(deshake->ry, RY_MIN, RY_MAX);
+        deshake->edge = av_clip(deshake->edge, FILL_BLANK, FILL_COUNT - 1);
+        deshake->contrast = av_clip(deshake->contrast, CONTRAST_MIN, CONTRAST_MAX);
+        deshake->search = av_clip(deshake->search, EXHAUSTIVE, SEARCH_COUNT - 1);
+        T_SET(deshake->avg, =, 0);
+
+    }
+    if (*filename) {
+         if ((deshake->fp = fopen(filename, "w")) != NULL) {
+              statmsg = av_asprintf("          %12s  %12s  %12s    %12s  %12s  %12s    %12s  %12s  %12s    %12s  %12s  %12s\n\n",
+                                    "Orig x", "Avg x", "Final x", "Orig y", "Avg y", "Final y", "Orig angle", "Avg angle", "Final angle", "Orig zoom", "Avg zoom", "Final zoom");
+              fwrite(statmsg, sizeof(char), strlen(statmsg), deshake->fp);
+#ifdef EXPER01
+              fflush(deshake->fp);
+#endif
+              av_free(statmsg);
+         } else {
+              av_log(deshake,AV_LOG_ERROR,"Failed to open stat file %s: %s\n", filename, strerror(errno));
+         }
+    }
+
+    // Quadword align left edge of box for MMX code; adjust width if necessary
+    // to keep right margin
+    if (deshake->cx > 0) {
+        deshake->cw += deshake->cx - (deshake->cx & ~15);
+        deshake->cx &= ~15;
+    }
+
+#ifdef EXPER01
+    p_32_01 = (u_int32_t*)&deshake->extra.optmask;
+    av_log(ctx, AV_LOG_INFO, "cx: %d, cy: %d, cw: %d, ch: %d, rx: %d, ry: %d, edge: %d blocksize: %d contrast: %d search: %d  zoom: %d  option mask: 0x%08lx %08lx  alpha: %f%s%s\n",
+           deshake->cx, deshake->cy, deshake->cw, deshake->ch,
+           deshake->rx, deshake->ry, deshake->edge, deshake->blocksize * 2, deshake->contrast, deshake->search, DESHAKE_ZOOM,
+           (unsigned long)p_32_01[1], (unsigned long)p_32_01[0], DESHAKE_ALPHA, (*filename? "  log file: " : " oh "), (*filename? filename : " no "));
+    if (deshake->extra.optmask) {
+         av_log(NULL,AV_LOG_VERBOSE,"Enabled deshake options: ");
+         for (i = 0 ; i < get_n_optmask_selections() ; i++) {
+              osp = &optmask_selections[i];
+              if (deshake->extra.optmask & osp->mask) {
+                   av_log(NULL,AV_LOG_VERBOSE,"%s%s",(nopts? ", " : ""), osp->shortdescr);
+                   nopts++;
+              }
+         }
+         av_log(NULL,AV_LOG_VERBOSE,"\n");
+    }
+#else
+    av_log(ctx, AV_LOG_INFO, "cx: %d, cy: %d, cw: %d, ch: %d, rx: %d, ry: %d, edge: %d blocksize: %d contrast: %d search: %d  %s\n",
+           deshake->cx, deshake->cy, deshake->cw, deshake->ch,
+           deshake->rx, deshake->ry, deshake->edge, deshake->blocksize * 2, deshake->contrast, deshake->search, (*filename? filename : ""));
+#endif
+
+    return 0;
+}
+
+static int query_formats(AVFilterContext *ctx)
+{
+    enum PixelFormat pix_fmts[] = {
+        PIX_FMT_YUV420P,  PIX_FMT_YUV422P,  PIX_FMT_YUV444P,  PIX_FMT_YUV410P,
+        PIX_FMT_YUV411P,  PIX_FMT_YUV440P,  PIX_FMT_YUVJ420P, PIX_FMT_YUVJ422P,
+        PIX_FMT_YUVJ444P, PIX_FMT_YUVJ440P, PIX_FMT_NONE
+    };
+
+    avfilter_set_common_pixel_formats(ctx, avfilter_make_format_list(pix_fmts));
+
+    return 0;
+}
+
+static int config_props(AVFilterLink *link)
+{
+    DeshakeContext *deshake = link->dst->priv;
+
+    deshake->ref = NULL;
+    deshake->last.vector.x = 0;
+    deshake->last.vector.y = 0;
+    deshake->last.angle = 0;
+    deshake->last.zoom = 0;
+
+    deshake->avctx = avcodec_alloc_context3(NULL);
+    dsputil_init(&deshake->c, deshake->avctx);
+
+    return 0;
+}
+
+static av_cold void uninit(AVFilterContext *ctx)
+{
+    DeshakeContext *deshake = ctx->priv;
+
+    avfilter_unref_buffer(deshake->ref);
+    if (deshake->fp)
+        fclose(deshake->fp);
+}
+
 
 AVFilter avfilter_vf_deshake = {
     .name      = "deshake",

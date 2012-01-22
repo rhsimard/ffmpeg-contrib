@@ -58,6 +58,7 @@ enum opt_select { OPT_NULL_TRANSFORM,
                   OPT_LOG_SEARCH_LOOP,
                   OPT_LOG_SECONDARY_SEARCH_LOOP,
                   OPT_LOG_SECONDARY_SEARCH_LOOP_END,
+                  OPT_LOG_FIND_MOTION_FINAL,
                   OPT_GLOBAL_01,
                   OPT_GLOBAL_02,
                   OPT_GLOBAL_03,
@@ -102,6 +103,7 @@ extern int global_option_04;
 #define DESHAKE_ZOOM (deshake->extra.zoom)
 #define DESHAKE_WINNING_COUNT (deshake->extra.winning_count)
 #define DESHAKE_WINNING_MV (deshake->extra.imvs[0])
+#define DESHAKE_ALPHA (deshake->extra.alpha)
 
 // Normally in vf_deshake.c
 typedef struct {
@@ -114,9 +116,10 @@ typedef struct {
 typedef struct {
      int zoom;   // Manually-set test value using integer percentages.
      u_int64_t  optmask;  // Bit mask for on-off devel/debug options.
-     IntMotionVector imvs[10];
-     int n_valid_imvs;
-     int winning_count;
+     IntMotionVector imvs[10];             // motion vector data from scans to use for final vectors
+     int n_valid_imvs;                     // Number of valid motion vectors in invs
+     int winning_count;                    // The count found in find_motion that is chosen for the gmv
+     float  alpha;                         // User-specified alpha for exponential average, if any; overrides default.
 } DeshakeContextExtra;
 
 //extern u_int64_t dummy_optmask;

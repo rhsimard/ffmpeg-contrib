@@ -29,10 +29,11 @@ OptmaskSelection optmask_selections[] =
      { 0x0000000000000040, "final vector normalize"           , "normalize final vectors"                              },
      { 0x0000000000000080, "log block vectors inner loop"     , "log inner loop of block-vector function"              },
      { 0x0000000000000100, "log block vectors final"          , "log final stage of block-vector generation"           },
-     { 0x0000000000000200, "log block motion final"           , "log find_block_motion final"                          },
+     { 0x0000000000000200, "log find_block_motion final"      , "log find_block_motion final"                          },
      { 0x0000000000000400, "log exhaustive loop"              , "log exhaustive-check search loop"                     },
      { 0x0000000000000800, "log smart search loop"            , "log smart-exhaustive-check search loop"               },
      { 0x0000000000001000, "log exhaustive loop final"        , "log smart-exhaustive-check loop final"                },
+     { 0x0000000000002000, "log find_motion final"            , "log find_motion final"                                },
      { 0x0010000000000000, "global option 01"                 , "enable global option 01"                              },
      { 0x0020000000000000, "global option 02"                 , "enable global option 02"                              },
      { 0x0040000000000000, "global option 03"                 , "enable global option 03"                              },
@@ -176,6 +177,7 @@ int opt_exper01_options(const char *opt, const char *arg)
      int i;
      u_int32_t *p32;
 
+     printf("Options: %s\n","x:y:w:h:rx:ry:edge:blocksize:contrast:search:zoom:option-mask:alpha:filename");
      printf("Option mask:\n");
      for (i = 0 ; i < sizeof(optmask_selections)/sizeof(OptmaskSelection) ; i++) {
           OptmaskSelection *os = &optmask_selections[i];

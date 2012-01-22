@@ -36,6 +36,9 @@
 #include "libswscale/swscale.h"
 #include "libswresample/swresample.h"
 #include "libpostproc/postprocess.h"
+
+#include "libavutil/exper01.h"
+
 #include "cmdutils.h"
 
 const char program_name[] = "ffprobe";

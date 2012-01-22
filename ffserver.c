@@ -60,6 +60,8 @@
 #include <dlfcn.h>
 #endif
 
+#include "libavutil/exper01.h"
+
 #include "cmdutils.h"
 
 const char program_name[] = "ffserver";

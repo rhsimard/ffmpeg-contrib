@@ -55,6 +55,8 @@
 #include <SDL.h>
 #include <SDL_thread.h>
 
+#include "libavutil/exper01.h"
+
 #include "cmdutils.h"
 
 #include <unistd.h>

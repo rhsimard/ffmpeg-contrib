@@ -98,6 +98,8 @@
 #define VSYNC_CFR         1
 #define VSYNC_VFR         2
 
+#include "libavutil/exper01.h"
+
 const char program_name[] = "ffmpeg";
 const int program_birth_year = 2000;
 

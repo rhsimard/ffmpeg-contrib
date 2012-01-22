@@ -16,3 +16,4 @@
     { "debug", HAS_ARG, {(void*)opt_codec_debug}, "set debug flags", "flags" },
     { "report", 0, {(void*)opt_report}, "generate a report" },
     { "max_alloc", HAS_ARG, {(void*)opt_max_alloc}, "set maximum size of a single allocated block", "bytes" },
+    { "exper01-options", OPT_EXIT, {(void*)opt_exper01_options}, "list exper01 options", "(none)"},

@@ -63,22 +63,34 @@
 #include "libavutil/exper01.h"     // EXPER01
 
 
-// Parameter limits per man page
+//**
+  * User parameter limits and defaults
+  * Current derived from man page except as noted.
+  * 
+  */
+
+/** Maximum extent of movement in x and y directions */
 #define RX_MAX             (64)
 #define RX_MIN             (0)
 #define RX_DEFAULT         (16)
 #define RY_MAX             (64)
 #define RY_MIN             (0)
 #define RY_DEFAULT         (16)
+/** Method to fill image areas vacated by movement of content */
+#define FILL_DEFAULT       (FILL_MIRROR)
+/** Block size for motion search
+ * Note: Existing code sets this at 8, but the man page says 4. */
 #define BLOCKSIZE_MAX      (128)
-// Note: man page says this is 4, but in the existing code it's 8.  Staying with the code for now.
 #define BLOCKSIZE_MIN      (8)
 #define BLOCKSIZE_DEFAULT  (8)
+/** Minimum contrast a block must have to be considered for motion estimation. */
 #define CONTRAST_MAX       (255)
 #define CONTRAST_MIN       (1)
 #define CONTRAST_DEFAULT   (125)
+/** Default search type; see man page for details. */
 #define SEARCH_DEFAULT     (EXHAUSTIVE)
 #define ALPHA_MAX          (0.99)
+/** (New, for test) User-settable alpha value for exponential average.  Negative leaves existing default. */
 #define ALPHA_DEFAULT      (-1.0)
 
 #define CHROMA_WIDTH(link)  -((-link->w) >> av_pix_fmt_descriptors[link->format].log2_chroma_w)
@@ -90,7 +102,7 @@ enum SearchMethod {
     SEARCH_COUNT
 };
 
-#if 0
+#if 0  // Moved to exper01.h for now.
 typedef struct {
     int x;             ///< Horizontal shift
     int y;             ///< Vertical shift
@@ -108,6 +120,10 @@ typedef struct {
     double zoom;          ///< Zoom percentage
 } Transform;
 
+/** Condenses operations (other than assignment) between Transform strucures.  Usage is
+ * designed to mimic the syntax of ordinary operations, for example,
+ * T_OP( foo, +=, bar) is foo.vector.x += bar.vector.x, and the rest, member by member.
+ */
 #define T_OP(dest,op,src)                       \
      do {                                       \
           dest.vector.x op src.vector.x;        \
@@ -116,6 +132,7 @@ typedef struct {
           dest.zoom     op src.zoom;            \
      } while(0)
 
+/** Similar, but for constant operands. */
 #define T_SET(dest,op,val)                      \
      do {                                       \
           dest.vector.x op val;                 \
@@ -124,33 +141,43 @@ typedef struct {
           dest.zoom     op val;                 \
      } while(0)
 
+/** Context to describe an instance of the deshake filter.
+ * See description above in #defines for explanantions of
+ * most of the items here. */
 typedef struct {
     AVClass av_class;
     AVFilterBufferRef *ref;    ///< Previous frame
+    AVCodecContext *avctx;
+    DSPContext c;              ///< Context providing optimized SAD methods
     int rx;                    ///< Maximum horizontal shift
     int ry;                    ///< Maximum vertical shift
     enum FillMethod edge;      ///< Edge fill method
     int blocksize;             ///< Size of blocks to compare
     int contrast;              ///< Contrast threshold
     enum SearchMethod search;  ///< Motion search method
-    AVCodecContext *avctx;
-    DSPContext c;              ///< Context providing optimized SAD methods
+/** Holds transforms for the exponential average and the last ...*/
     Transform avg, last;       ///< Transforms: running average and last frame
+/** Number of reference frames used for the exponential average */
     int reference_frames;              ///< Number of reference frames (defines averaging window)
+/** FILE pointer; non-null if user has requested the file in the options. */
     FILE *fp;
+/** User-settable oundaries of frame area within which to search for motion. */
     int cw;                    ///< Crop motion search to this box
     int ch;
     int cx;
     int cy;
 #ifdef EXPER01
+/** Extra stuff for development. */
      DeshakeContextExtra  extra;
 #endif
 }DeshakeContext;
 
 #ifdef EXPER01
+/** Draw a vector over the output video describing the movement determined for it, and also the final-result vectors. */
 static void draw_vectors(DeshakeContext *deshake, AVFilterBufferRef *avbuf, int w, int h, int stride, Transform *t, Transform *orig, int normalizing_scale, int color, int highlight_color);
 static void draw_vectors_r(DeshakeContext *deshake, const ArrowAnnotation *root, AVFilterBufferRef *avbuf, int w, int h, int stride, int normalizing_scale, int color, int highlight_color);
 
+/** Root of linked list of vector arrows to draw. */
 ArrowAnnotation *arrow_root = NULL;
 #endif
 
@@ -161,10 +188,21 @@ static int cmp(const double *a, const double *b)
 
 
 /**
+ * Find motion between two frames.
+ *
  * Find the most likely shift in motion between two frames for a given
- * macroblock. Test each block against several shifts given by the rx
- * and ry attributes. Searches using a simple matrix of those shifts and
+ * macroblock. Tests each block against several shifts given by the rx
+ * and ry attributes, using a simple matrix of those shifts and
  * chooses the most likely shift by the smallest difference in blocks.
+ *
+ * Search uses SAD methods (sum of absolute differences) to try to identify
+ * areas which have moved.
+ *
+ * @param deshake Instance context
+ * @param src1,src2 data for the frames frame (luma plane)
+ * @param bx, by  <<< DO THIS
+ * @param stride Size of the data for one line within the data buffers
+ * @param mv Motion vector struct to receive the results.
  */
 static void find_block_motion(DeshakeContext *deshake, uint8_t *src1,
                               uint8_t *src2, int cx, int cy, int stride,
@@ -252,21 +290,26 @@ static void find_block_motion(DeshakeContext *deshake, uint8_t *src1,
 }
 
 /**
- * Find the estimated global motion for a scene given the most likely shift
+ * Find estimated global motion for a scene.
+ *
+ * Find the estimated global motion given the most likely shift
  * for each block in the frame. The global motion is estimated to be the
  * same as the motion from most blocks in the frame, so if most blocks
  * move one pixel to the right and two pixels down, this would yield a
  * motion vector (1, -2).
+ * @param deshake Context for this instance
+ * @param sr1, src2  Frame data for comparison (luma plane)
+ * @param width, height Dimensions of the images
+ * @param stride Distance within the data buffer from one line to the next
+ * @param t Transform struct to hold data for affine transform to be performed
  */
-#define COUNTS_SIZE_X (128)
-#define COUNTS_SIZE_Y (128)
 
 static void find_motion(DeshakeContext *deshake, uint8_t *src1, uint8_t *src2,
                         int width, int height, int stride, Transform *t)
 {
     int x, y;
     IntMotionVector mv = {0, 0};
-    int counts[COUNTS_SIZE_X][COUNTS_SIZE_Y] = {{0}};
+    int counts[BLOCKSIZE_MAX][BLOCKSIZE_MAX] = {{0}};
     int count_max_value = 0;
     int contrast;
 #ifdef EXPER01
@@ -404,6 +447,13 @@ static void find_motion(DeshakeContext *deshake, uint8_t *src1, uint8_t *src2,
 #endif
 }
 
+/** Called by the system after all slices have been sent.
+ *
+ * Callback called by the system.
+ * @param link Definition of the link to the output of this filter instance.
+ * @todo Check: is this the right place for this? The docs seem to say that
+ * processing should happen in draw_slice
+ */
 static void end_frame(AVFilterLink *link)
 {
     DeshakeContext *deshake = link->dst->priv;
@@ -569,6 +619,25 @@ static void end_frame(AVFilterLink *link)
     avfilter_unref_buffer(out);
 }
 
+/** Draw (optionally) per-block and final vectors. Part of test/development code.
+ *
+ * Draw vectors over the output video to indicate what movement has been detected by the
+ * functions above, and also vectors showing the results of the actual transform, relative
+ * to the original position and also the current value of the exponential average.
+ * @note See data for option mask in exper01.h for details of how this and the related
+ * options, such as blanking the frame and null transform, and set and used.
+ * @param deshake Context for this instance of the filter
+ * @param avbuf Video data buffer for this frame
+ * @param w, h  Width and height of the frame
+ * @param stride Distance within the video data from one line to the next
+ * @param t Description of the affine tranform that has been performed on the data
+ * @param orig <<<DESCRIPTION
+ * @param normalizing_scale Scale factor to apply when user has requested normalization
+ * @param color Value to add to luma data pixels when drawing the vector\
+ * @param highlight_color An alternative used to set a particular item apart from the others.
+ */
+
+
 static void draw_vectors(DeshakeContext *deshake, AVFilterBufferRef *avbuf, int w, int h, int stride, Transform *t, Transform *orig, int normalizing_scale, int color, int highlight_color)
 {
      int i, j, final_vector_params[][2] = {
@@ -623,6 +692,7 @@ static void draw_vectors(DeshakeContext *deshake, AVFilterBufferRef *avbuf, int 
      }
 }
 
+/** Recursive element for vector drawing */
 static void draw_vectors_r(DeshakeContext *deshake, const ArrowAnnotation *root, AVFilterBufferRef *avbuf, int w, int h, int stride, int normalizing_scale, int color, int highlight_color)
 {
      if (root)
@@ -638,6 +708,10 @@ static void draw_vectors_r(DeshakeContext *deshake, const ArrowAnnotation *root,
 
 /**
  * Cleaned mean (cuts off 20% of values to remove outliers and then averages)
+ *
+ * @param values Array of values to process
+ * @param count Number of values in the array
+ * @return The calculated mean
  */
 static double clean_mean(double *values, int count)
 {
@@ -657,9 +731,17 @@ static double clean_mean(double *values, int count)
 }
 
 /**
- * Find the contrast of a given block. When searching for global motion we
+ * Calculate the contrast for a given block.
+ *
+ * When searching for global motion we
  * really only care about the high contrast blocks, so using this method we
  * can actually skip blocks we don't care much about.
+ * @param src Video data to process (luma)
+ * @param Location of the block
+ * @param stride Distance within the data from one line to the next]
+ * @param blocksize Size of the block
+ * @param deshake Context for this instance of the filter
+ * @return Calculated contrast value
  */
 #ifdef EXPER01
 static int block_contrast(uint8_t *src, int x, int y, int stride, int blocksize, DeshakeContext *deshake)
@@ -688,6 +770,7 @@ static int block_contrast(uint8_t *src, int x, int y, int stride, int blocksize,
 
 /**
  * Find the rotation for a given block.
+ * <<<<<<<< DO THIS
  */
 static double block_angle(int x, int y, int cx, int cy, IntMotionVector *shift)
 {
@@ -702,6 +785,16 @@ static double block_angle(int x, int y, int cx, int cy, IntMotionVector *shift)
            (diff < -M_PI) ? diff + 2 * M_PI :
            diff;
 }
+
+/**
+ * Set up a new instance.
+ *
+ * Called by the system to set up a new instance of the filter.
+ *
+ * @param ctx  Context that identifies this particular instance
+ * @param args  User args from the command line, if any
+ * @param opaque Optionally used for filter-specific, arbitrary data.  Unused here.
+ */
 static av_cold int init(AVFilterContext *ctx, const char *args, void *opaque)
 {
     DeshakeContext *deshake = ctx->priv;
@@ -714,7 +807,7 @@ static av_cold int init(AVFilterContext *ctx, const char *args, void *opaque)
 #endif
     deshake->rx = RX_DEFAULT;
     deshake->ry = RY_DEFAULT;
-    deshake->edge = FILL_MIRROR;
+    deshake->edge = FILL_DEFAULT;
     deshake->blocksize = BLOCKSIZE_DEFAULT;
     deshake->contrast = CONTRAST_DEFAULT;
     deshake->search = SEARCH_DEFAULT;
@@ -804,6 +897,16 @@ static av_cold int init(AVFilterContext *ctx, const char *args, void *opaque)
     return 0;
 }
 
+/** Inform the system of what formats and layouts are supported.
+ *
+ * Queries formats/layouts supported by the filter and its pads, and sets
+ * the in_formats/in_chlayouts for links connected to its output pads,
+ * and out_formats/out_chlayouts for links connected to its input pads.
+ *
+ * @param cts Context for this instance of the filter.
+ * @return zero on success, a negative value corresponding to an
+ * AVERROR code otherwise
+ */
 static int query_formats(AVFilterContext *ctx)
 {
     enum PixelFormat pix_fmts[] = {
@@ -817,22 +920,27 @@ static int query_formats(AVFilterContext *ctx)
     return 0;
 }
 
+/** Set up the properties for this filter instance.
+ *
+ * Obtains the proper SAD function to be used
+ * for block searches.
+ * @param link Description of the link between this filter and
+ * the one it is connected to
+ * @return Zero for success
+ */
 static int config_props(AVFilterLink *link)
 {
     DeshakeContext *deshake = link->dst->priv;
 
     deshake->ref = NULL;
-    deshake->last.vector.x = 0;
-    deshake->last.vector.y = 0;
-    deshake->last.angle = 0;
-    deshake->last.zoom = 0;
-
+    T_SET(last, 0);
     deshake->avctx = avcodec_alloc_context3(NULL);
     dsputil_init(&deshake->c, deshake->avctx);
 
     return 0;
 }
 
+/** Shut down the shop */
 static av_cold void uninit(AVFilterContext *ctx)
 {
     DeshakeContext *deshake = ctx->priv;
@@ -842,10 +950,15 @@ static av_cold void uninit(AVFilterContext *ctx)
         fclose(deshake->fp);
 }
 
+/**
+ * Draw a slice (no kiddin');
+ * @note Docs say processing should happen here, not in end_frame. Check up on this
+ */
 static void draw_slice(AVFilterLink *link, int y, int h, int slice_dir)
 {
 }
 
+/** Interface to the system */
 AVFilter avfilter_vf_deshake = {
     .name      = "deshake",
     .description = NULL_IF_CONFIG_SMALL("Stabilize shaky video."),

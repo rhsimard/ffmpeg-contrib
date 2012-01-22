@@ -109,6 +109,12 @@ typedef struct {
 } IntMotionVector;
 #endif
 
+/** Description of a particular displacement.
+ * @note There is an identical struct but with
+ * integer members, IntMotionVector, normally here but
+ * currently temporarily relocated to
+ * exper01.h for test and development work.
+ */
 typedef struct {
     double x;             ///< Horizontal shift
     double y;             ///< Vertical shift
@@ -141,8 +147,8 @@ typedef struct {
           dest.zoom     op val;                 \
      } while(0)
 
-/** Context to describe an instance of the deshake filter.
- * See description above in #defines for explanantions of
+/** Description of an instance of the deshake filter.
+ * See description above in #defines for explanantions for
  * most of the items here. */
 typedef struct {
     AVClass av_class;
@@ -198,14 +204,14 @@ static int cmp(const double *a, const double *b)
  * Search uses SAD methods (sum of absolute differences) to try to identify
  * areas which have moved.
  *
- * @param deshake Instance context
+ * @param deshake Instance description
  * @param src1,src2 data for the frames frame (luma plane)
- * @param bx, by  <<< DO THIS
+ * @param bx, by Location of the block
  * @param stride Size of the data for one line within the data buffers
  * @param mv Motion vector struct to receive the results.
  */
 static void find_block_motion(DeshakeContext *deshake, uint8_t *src1,
-                              uint8_t *src2, int cx, int cy, int stride,
+                              uint8_t *src2, int bx, int by, int stride,
                               IntMotionVector *mv)
 {
     int x, y;
@@ -213,7 +219,7 @@ static void find_block_motion(DeshakeContext *deshake, uint8_t *src1,
     int smallest = INT_MAX;
     int tmp, tmp2;
 
-    #define CMP(i, j) deshake->c.sad[0](deshake, src1 + cy * stride + cx, \
+    #define CMP(i, j) deshake->c.sad[0](deshake, src1 + by * stride + bx, \
                                         src2 + (j) * stride + (i), stride, \
                                         deshake->blocksize)
 
@@ -221,7 +227,7 @@ static void find_block_motion(DeshakeContext *deshake, uint8_t *src1,
         // Compare every possible position - this is sloooow!
         for (y = -deshake->ry; y <= deshake->ry; y++) {
             for (x = -deshake->rx; x <= deshake->rx; x++) {
-                diff = CMP(cx - x, cy - y);
+                diff = CMP(bx - x, by - y);
                 if (diff < smallest) {
                     smallest = diff;
                     mv->x = x;
@@ -238,7 +244,7 @@ static void find_block_motion(DeshakeContext *deshake, uint8_t *src1,
         // Compare every other possible position and find the best match
         for (y = -deshake->ry + 1; y < deshake->ry - 2; y += 2) {
             for (x = -deshake->rx + 1; x < deshake->rx - 2; x += 2) {
-                diff = CMP(cx - x, cy - y);
+                diff = CMP(bx - x, by - y);
                 if (diff < smallest) {
                     smallest = diff;
                     mv->x = x;
@@ -262,7 +268,7 @@ static void find_block_motion(DeshakeContext *deshake, uint8_t *src1,
                     }
 #endif
 
-                diff = CMP(cx - x, cy - y);
+                diff = CMP(bx - x, by - y);
                 if (diff < smallest) {
                     smallest = diff;
                     mv->x = x;
@@ -297,7 +303,7 @@ static void find_block_motion(DeshakeContext *deshake, uint8_t *src1,
  * same as the motion from most blocks in the frame, so if most blocks
  * move one pixel to the right and two pixels down, this would yield a
  * motion vector (1, -2).
- * @param deshake Context for this instance
+ * @param deshake Description of this instance
  * @param sr1, src2  Frame data for comparison (luma plane)
  * @param width, height Dimensions of the images
  * @param stride Distance within the data buffer from one line to the next
@@ -626,7 +632,7 @@ static void end_frame(AVFilterLink *link)
  * to the original position and also the current value of the exponential average.
  * @note See data for option mask in exper01.h for details of how this and the related
  * options, such as blanking the frame and null transform, and set and used.
- * @param deshake Context for this instance of the filter
+ * @param deshake Description of this instance of the filter
  * @param avbuf Video data buffer for this frame
  * @param w, h  Width and height of the frame
  * @param stride Distance within the video data from one line to the next
@@ -740,7 +746,7 @@ static double clean_mean(double *values, int count)
  * @param Location of the block
  * @param stride Distance within the data from one line to the next]
  * @param blocksize Size of the block
- * @param deshake Context for this instance of the filter
+ * @param deshake Description of this instance of the filter
  * @return Calculated contrast value
  */
 #ifdef EXPER01
@@ -791,7 +797,7 @@ static double block_angle(int x, int y, int cx, int cy, IntMotionVector *shift)
  *
  * Called by the system to set up a new instance of the filter.
  *
- * @param ctx  Context that identifies this particular instance
+ * @param ctx  Description of this instance
  * @param args  User args from the command line, if any
  * @param opaque Optionally used for filter-specific, arbitrary data.  Unused here.
  */
@@ -903,7 +909,7 @@ static av_cold int init(AVFilterContext *ctx, const char *args, void *opaque)
  * the in_formats/in_chlayouts for links connected to its output pads,
  * and out_formats/out_chlayouts for links connected to its input pads.
  *
- * @param cts Context for this instance of the filter.
+ * @param cts Description of this instance
  * @return zero on success, a negative value corresponding to an
  * AVERROR code otherwise
  */

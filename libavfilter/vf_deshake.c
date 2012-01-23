@@ -459,9 +459,11 @@ static void find_motion(DeshakeContext *deshake, uint8_t *src1, uint8_t *src2,
 #endif
 }
 
-/** Called by the system after all slices have been sent; All processing is done here.
+/** All processing done here; see full description.
  *
- * Callback called by the system.
+ * Callback called by the system, normally after all slices have been sent.
+ * This has an empty draw_slice and it appears that the output is being
+ * deferred to this point.
  * @param link Definition of the link to the output of this filter instance.
  * @todo Check: Is this the right place for this? The docs seem to say that
  * processing should happen in draw_slice()
@@ -654,6 +656,7 @@ static void end_frame(AVFilterLink *link)
  * @param normalizing_scale Scale factor to apply when user has requested normalization
  * @param color Value to add to luma data pixels when drawing the vector
  * @param highlight_color An alternative used to set a particular item apart from the others.
+ * @note When blanking the frame is enabled, both regular and hightlight colors are set to max (255).
  */
 static void draw_vectors(DeshakeContext *deshake, AVFilterBufferRef *avbuf, int w, int h, int stride, Transform *t, Transform *orig, int normalizing_scale, int color, int highlight_color)
 {
@@ -663,7 +666,14 @@ static void draw_vectors(DeshakeContext *deshake, AVFilterBufferRef *avbuf, int 
           { t->vector.x,            t->vector.y            }
      };
 
-     if (OPTMASK(OPT_BLOCK_VECTORS)) {
+#define AVG_X (final_vector_params[0][0])
+#define AVG_Y (final_vector_params[0][1])
+#define ORIG_X (final_vector_params[1][0])
+#define ORIG_Y (final_vector_params[1][1])
+#define T_X (final_vector_params[2][0])
+#define T_Y (final_vector_params[2][1])
+
+    if (OPTMASK(OPT_BLOCK_VECTORS)) {
           if (DESHAKE_WINNING_COUNT) { // Do this first.
                static int fuss = 8;
                if (fuss) {
@@ -693,15 +703,15 @@ static void draw_vectors(DeshakeContext *deshake, AVFilterBufferRef *avbuf, int 
           // Scaling, sign, normalizing
           for (i = 0 ; i < 3 ; i++) {
                for (j = 0 ; j < 2 ; j++) {
-                    final_vector_params[i][j] *= (OPTMASK(OPT_FINAL_VECTORS_NORMALIZE)) ? normalizing_scale : 1;
+                    final_vector_params[i][j] *= (OPTMASK(OPT_FINAL_VECTORS_NORMALIZE)) ? -normalizing_scale : -1;
                     final_vector_params[i][j] += (j) ? h/2 : w/2 ;
                }
           }
           if (OPTMASK(OPT_FINAL_VECTOR_ORIG_TO_FINAL)) {
-               exper01_draw_arrow(avbuf, final_vector_params[1][0], final_vector_params[1][1], final_vector_params[2][0], final_vector_params[2][1], w, h, stride, highlight_color);
+               exper01_draw_arrow(avbuf, T_X, T_Y, ORIG_X, ORIG_Y, w, h, stride, highlight_color);
           }
           if (OPTMASK(OPT_FINAL_VECTOR_AVG_TO_FINAL)) {
-               exper01_draw_arrow(avbuf, final_vector_params[0][0], final_vector_params[0][1], final_vector_params[2][0], final_vector_params[2][1], w, h, stride, highlight_color);
+               exper01_draw_arrow(avbuf, T_X, T_Y, AVG_X, AVG_Y, w, h, stride, highlight_color);
           }
      }
 }
@@ -718,6 +728,14 @@ static void draw_vectors_r(DeshakeContext *deshake, const ArrowAnnotation *root,
           draw_vectors_r(deshake, root->next, avbuf, w, h, stride, normalizing_scale, color, highlight_color);
           av_free(root);
      }
+}
+
+/**
+ * Draw a slice (unused);
+ * @todo Docs say processing should happen here, not in end_frame; check up on this.
+ */
+static void draw_slice(AVFilterLink *link, int y, int h, int slice_dir)
+{
 }
 
 /**
@@ -963,14 +981,6 @@ static av_cold void uninit(AVFilterContext *ctx)
     avfilter_unref_buffer(deshake->ref);
     if (deshake->fp)
         fclose(deshake->fp);
-}
-
-/**
- * Draw a slice (unused);
- * @todo Docs say processing should happen here, not in end_frame; check up on this.
- */
-static void draw_slice(AVFilterLink *link, int y, int h, int slice_dir)
-{
 }
 
 /** Interface to the system */

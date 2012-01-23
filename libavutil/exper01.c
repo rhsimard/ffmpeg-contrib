@@ -34,7 +34,6 @@ OptmaskSelection optmask_selections[] =
      { 0x0000000000000800, "log smart search loop"            , "log smart-exhaustive-check search loop"               },
      { 0x0000000000001000, "log exhaustive loop final"        , "log smart-exhaustive-check loop final"                },
      { 0x0000000000002000, "log find_motion final"            , "log find_motion final"                                },
-     { 0x0000000000004000, "update max counts after scan loop", "find_motion orig code: Update max count after scan"   },
      { 0x0010000000000000, "global option 01"                 , "enable global option 01"                              },
      { 0x0020000000000000, "global option 02"                 , "enable global option 02"                              },
      { 0x0040000000000000, "global option 03"                 , "enable global option 03"                              },

@@ -345,7 +345,6 @@ static av_cold int init(AVFilterContext *ctx, const char *args, void *opaque)
     if (!*fontfile_g) {
          av_strlcpy(fontfile_g, dtext->fontfile, PATH_MAX);
     }
-    av_log(ctx,AV_LOG_ERROR,"%s %d: Font file='%s' and '%s'\n", __func__,__LINE__,dtext->fontfile, fontfile_g);
 #endif
     if (dtext->textfile) {
         uint8_t *textbuf;

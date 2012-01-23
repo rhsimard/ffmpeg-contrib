@@ -34,6 +34,7 @@ OptmaskSelection optmask_selections[] =
      { 0x0000000000000800, "log smart search loop"            , "log smart-exhaustive-check search loop"               },
      { 0x0000000000001000, "log exhaustive loop final"        , "log smart-exhaustive-check loop final"                },
      { 0x0000000000002000, "log find_motion final"            , "log find_motion final"                                },
+     { 0x0000000000004000, "update max counts after scan loop", "find_motion orig code: Update max count after scan"   },
      { 0x0010000000000000, "global option 01"                 , "enable global option 01"                              },
      { 0x0020000000000000, "global option 02"                 , "enable global option 02"                              },
      { 0x0040000000000000, "global option 03"                 , "enable global option 03"                              },
@@ -151,7 +152,7 @@ void exper01_draw_arrow(AVFilterBufferRef *avbuf, int sx, int sy, int ex,
 
 #define ARROWHEAD_SIZE (5)
 
-     int sxm = sx-1, sym = sy+1, exm=ex-1, eym=ey+1;
+     int sxm = sx-1, sym = sy+1, exm=ex-1, eym=ey+1, rx, ry, length=0;
 
      sx = av_clip(sx, 2, w-2);
      sy = av_clip(sy, 2, h-2);
@@ -163,20 +164,24 @@ void exper01_draw_arrow(AVFilterBufferRef *avbuf, int sx, int sy, int ex,
      dy = ey - sy;
 
      if (dx * dx + dy * dy > ARROWHEAD_SIZE * ARROWHEAD_SIZE) {
-          int rx =  dx + dy;
-          int ry = -dx + dy;
-          int length = ff_sqrt((rx * rx + ry * ry) << 8);
+          rx =  dx + dy;
+          ry = -dx + dy;
+          length = ff_sqrt((rx * rx + ry * ry) << 8);
 
           // FIXME subpixel accuracy
           rx = ROUNDED_DIV(rx * ARROWHEAD_SIZE << 4, length);
           ry = ROUNDED_DIV(ry * ARROWHEAD_SIZE << 4, length);
 
+          // Draw the arrowhead shadow.
           exper01_draw_line(avbuf, sxm, sym, sxm + rx, sym + ry, w, h, stride, 256-color);
           exper01_draw_line(avbuf, sxm, sym, sxm - ry, sym + rx, w, h, stride, 256-color);
-          exper01_draw_line(avbuf, sx, sy, sx + rx, sy + ry, w, h, stride, color);
+     }
+     exper01_draw_line(avbuf, sxm, sym, exm, eym, w, h, stride, 256-color);  // Draw shadow
+     if (length) {
+          exper01_draw_line(avbuf, sx, sy, sx + rx, sy + ry, w, h, stride, color); // Draw arrowhead.
           exper01_draw_line(avbuf, sx, sy, sx - ry, sy + rx, w, h, stride, color);
      }
-     exper01_draw_line(avbuf, sx, sy, ex, ey, w, h, stride, color);
+     exper01_draw_line(avbuf, sx, sy, ex, ey, w, h, stride, color);          // Draw arrow
 }
 
 

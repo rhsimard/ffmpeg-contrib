@@ -51,6 +51,15 @@
 #include FT_FREETYPE_H
 #include FT_GLYPH_H
 
+#include "libavutil/exper01.h"
+
+//#undef EXPER01
+#ifdef EXPER01
+#  define DRAWTEXT_FONTFILE_ENV "FFMPEG_DRAWTEXT_FONTFILE"
+static uint8_t* fontfile_g;
+static int fontfile_g_refcount;
+#endif
+
 static const char * const var_names[] = {
     "main_w", "w", "W",       ///< width  of the input video
     "main_h", "h", "H",       ///< height of the input video
@@ -304,6 +313,7 @@ static av_cold int init(AVFilterContext *ctx, const char *args, void *opaque)
     int err;
     DrawTextContext *dtext = ctx->priv;
     Glyph *glyph;
+    uint8_t *ffntemp;
 
     dtext->class = &drawtext_class;
     av_opt_set_defaults(dtext);
@@ -314,10 +324,26 @@ static av_cold int init(AVFilterContext *ctx, const char *args, void *opaque)
     }
 
     if (!dtext->fontfile) {
-        av_log(ctx, AV_LOG_ERROR, "No font filename provided\n");
-        return AVERROR(EINVAL);
+#ifdef EXPER01
+         if (fontfile_g) {
+              dtext->fontfile = av_strdup(fontfile_g);
+         } else if (ffntemp = getenv(DRAWTEXT_FONTFILE_ENV)) {
+              fontfile_g = av_strdup(ffntemp);
+         } else {
+#endif
+              av_log(ctx, AV_LOG_ERROR, "No font filename provided\n");
+              return AVERROR(EINVAL);
+         }
     }
-
+#ifdef EXPER01
+    else {
+         if (!fontfile_g) {
+              fontfile_g = av_strdup(dtext->fontfile);
+         }
+    }
+    fontfile_g_refcount++;
+    av_log(ctx,AV_LOG_ERROR,"%s %d: Font file='%s' and '%s'  refcount=%d\n", __func__,__LINE__,dtext->fontfile, fontfile_g, fontfile_g_refcount);
+#endif
     if (dtext->textfile) {
         uint8_t *textbuf;
         size_t textbuf_size;
@@ -464,6 +490,14 @@ static av_cold void uninit(AVFilterContext *ctx)
         av_freep(&dtext->box_line[i]);
         dtext->pixel_step[i] = 0;
     }
+#ifdef EXPER01
+    av_log(dtext,AV_LOG_ERROR,"%s %d: fontfile_g refcount = %d\n", __func__, __LINE__, fontfile_g_refcount);
+    fflush(stderr);
+    fflush(stdout);
+    if (!--fontfile_g_refcount) {
+         av_freep(&fontfile_g);
+    }
+#endif
 }
 
 static inline int is_newline(uint32_t c)

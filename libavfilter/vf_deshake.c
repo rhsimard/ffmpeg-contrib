@@ -23,9 +23,9 @@
  * @file
  * fast deshake / depan video filter
  *
- * SAD block-matching motion compensation to fix small changes in
- * horizontal and/or vertical shift. This filter helps remove camera shake
+ * This filter helps remove camera shake
  * from hand-holding a camera, bumping a tripod, moving on a vehicle, etc.
+ * SAD (sum of absolute differences) methods are used to identify movement.
  *
  * Algorithm:
  *   - For each frame with one previous reference frame
@@ -36,12 +36,11 @@
  *       - Find most likely rotation angle
  *       - Transform image along global motion
  *
- * @TODO:
+ * @todo:
  *   - Fill frame edges based on previous/next reference frames
  *   - Fill frame edges by stretching image near the edges?
  *       - Can this be done quickly and look decent?
-
- * @todo: Near term: Investigate and implement as appropriate the zoom feature.
+ *   - Near term: Investigate and implement as appropriate the zoom feature.
  *
  * Dark Shikari links to http://wiki.videolan.org/SoC_x264_2010#GPU_Motion_Estimation_2
  * for an algorithm similar to what could be used here to get the gmv
@@ -62,40 +61,44 @@
 #include "transform.h"
 #include "libavutil/exper01.h"     // EXPER01
 
+#ifdef EXPER01
+#include <time.h>
+static unsigned long fcount = 0;
+static unsigned long icount = 0;
+#endif
 
-//**
-  * User parameter limits and defaults
-  * Current derived from man page except as noted.
-  * 
-  */
-
-/** Maximum extent of movement in x and y directions */
+// Trick: In each set here, put the alphabetically-lowest first, so doxygen will annotate it before the others. (There's probably a better way; check on it sometime.)
+/** Limits and default for user option of the maximum extent of movement in x and y directions */
+#define RX_DEFAULT         (16)
 #define RX_MAX             (64)
 #define RX_MIN             (0)
-#define RX_DEFAULT         (16)
+#define RY_DEFAULT         (16)
 #define RY_MAX             (64)
 #define RY_MIN             (0)
-#define RY_DEFAULT         (16)
-/** Method to fill image areas vacated by movement of content */
+/** Default for user option of the method to fill image areas vacated by tranformation */
 #define FILL_DEFAULT       (FILL_MIRROR)
-/** Block size for motion search
- * Note: Existing code sets this at 8, but the man page says 4. */
+/** Limits and default for user option of motion-search blocksize.
+ * @note Existing code sets this at 8, but the man page says 4. */
+#define BLOCKSIZE_DEFAULT  (8)
 #define BLOCKSIZE_MAX      (128)
 #define BLOCKSIZE_MIN      (8)
-#define BLOCKSIZE_DEFAULT  (8)
-/** Minimum contrast a block must have to be considered for motion estimation. */
+/** Limits and default for user option of the minimum contrast a block must have to be considered for motion estimation. */
+#define CONTRAST_DEFAULT   (125)
 #define CONTRAST_MAX       (255)
 #define CONTRAST_MIN       (1)
-#define CONTRAST_DEFAULT   (125)
 /** Default search type; see man page for details. */
 #define SEARCH_DEFAULT     (EXHAUSTIVE)
-#define ALPHA_MAX          (0.99)
-/** (New, for test) User-settable alpha value for exponential average.  Negative leaves existing default. */
+/** Limits and default for user option of alpha value for exponential average.
+ * A negative value leaves existing default based on the number of reference frames. (New, for test, may not stay.) */
 #define ALPHA_DEFAULT      (-1.0)
+#define ALPHA_MAX          (0.99)
+#define ALPHA_MIN          (.001)
 
-#define CHROMA_WIDTH(link)  -((-link->w) >> av_pix_fmt_descriptors[link->format].log2_chroma_w)
+/** Macros to obtain the dimensions of the chroma planes */
 #define CHROMA_HEIGHT(link) -((-link->h) >> av_pix_fmt_descriptors[link->format].log2_chroma_h)
+#define CHROMA_WIDTH(link)  -((-link->w) >> av_pix_fmt_descriptors[link->format].log2_chroma_w)
 
+/** Options for motion searches. */
 enum SearchMethod {
     EXHAUSTIVE,        ///< Search all possible positions
     SMART_EXHAUSTIVE,  ///< Search most possible positions (faster)
@@ -120,15 +123,24 @@ typedef struct {
     double y;             ///< Vertical shift
 } MotionVector;
 
+/** Description of a transform.
+ *
+ * Describes a transform performed, which could be performed, by the deshake
+ * filter on a frame.
+ * @todo Research needed into the workings of the zoom value.
+ */
 typedef struct {
-    MotionVector vector;  ///< Motion vector
-    double angle;         ///< Angle of rotation
-    double zoom;          ///< Zoom percentage
+     /** X and Y shifts       */
+    MotionVector vector;
+     /** Rotation             */
+    double angle;
+     /** Zoom percentage      */
+    double zoom;
 } Transform;
 
 /** Condenses operations (other than assignment) between Transform strucures.  Usage is
  * designed to mimic the syntax of ordinary operations, for example,
- * T_OP( foo, +=, bar) is foo.vector.x += bar.vector.x, and the rest, member by member.
+ * T_OP( foo, +=, bar) is foo.(each member) += bar.(corresponding member)
  */
 #define T_OP(dest,op,src)                       \
      do {                                       \
@@ -148,7 +160,7 @@ typedef struct {
      } while(0)
 
 /** Description of an instance of the deshake filter.
- * See description above in #defines for explanantions for
+ * See description above in defines for explanantions for
  * most of the items here. */
 typedef struct {
     AVClass av_class;
@@ -178,13 +190,18 @@ typedef struct {
 #endif
 }DeshakeContext;
 
+static double block_angle(int x, int y, int cx, int cy, IntMotionVector *shift);
+static double clean_mean(double *values, int count);
+
 #ifdef EXPER01
-/** Draw a vector over the output video describing the movement determined for it, and also the final-result vectors. */
+static int block_contrast(uint8_t *src, int x, int y, int stride, int blocksize, DeshakeContext *deshake);
 static void draw_vectors(DeshakeContext *deshake, AVFilterBufferRef *avbuf, int w, int h, int stride, Transform *t, Transform *orig, int normalizing_scale, int color, int highlight_color);
 static void draw_vectors_r(DeshakeContext *deshake, const ArrowAnnotation *root, AVFilterBufferRef *avbuf, int w, int h, int stride, int normalizing_scale, int color, int highlight_color);
-
-/** Root of linked list of vector arrows to draw. */
+/** Root of linked list of vector arrows to draw.
+ * @see draw_vectors() */
 ArrowAnnotation *arrow_root = NULL;
+#else
+static int block_contrast(uint8_t *src, int x, int y, int stride, int blocksize, DeshakeContext);
 #endif
 
 static int cmp(const double *a, const double *b)
@@ -194,7 +211,7 @@ static int cmp(const double *a, const double *b)
 
 
 /**
- * Find motion between two frames.
+ * Find motion between two frames. (???) block...?
  *
  * Find the most likely shift in motion between two frames for a given
  * macroblock. Tests each block against several shifts given by the rx
@@ -219,6 +236,7 @@ static void find_block_motion(DeshakeContext *deshake, uint8_t *src1,
     int smallest = INT_MAX;
     int tmp, tmp2;
 
+/** Call the previously-determined SAD routine to look for block displacements. */
     #define CMP(i, j) deshake->c.sad[0](deshake, src1 + by * stride + bx, \
                                         src2 + (j) * stride + (i), stride, \
                                         deshake->blocksize)
@@ -304,7 +322,7 @@ static void find_block_motion(DeshakeContext *deshake, uint8_t *src1,
  * move one pixel to the right and two pixels down, this would yield a
  * motion vector (1, -2).
  * @param deshake Description of this instance
- * @param sr1, src2  Frame data for comparison (luma plane)
+ * @param src1, src2  Frame data for comparison (luma plane)
  * @param width, height Dimensions of the images
  * @param stride Distance within the data buffer from one line to the next
  * @param t Transform struct to hold data for affine transform to be performed
@@ -313,7 +331,7 @@ static void find_block_motion(DeshakeContext *deshake, uint8_t *src1,
 static void find_motion(DeshakeContext *deshake, uint8_t *src1, uint8_t *src2,
                         int width, int height, int stride, Transform *t)
 {
-    int x, y;
+    int x, y, n;
     IntMotionVector mv = {0, 0};
     int counts[BLOCKSIZE_MAX][BLOCKSIZE_MAX] = {{0}};
     int count_max_value = 0;
@@ -322,7 +340,6 @@ static void find_motion(DeshakeContext *deshake, uint8_t *src1, uint8_t *src2,
     int arrow_index;
     double pre_clip_x, pre_clip_y;
     ArrowAnnotation *arrow, **a2;
-    unsigned long counter = 0;
 #endif
 
     int pos;
@@ -350,7 +367,14 @@ static void find_motion(DeshakeContext *deshake, uint8_t *src1, uint8_t *src2,
                  // av_log(NULL, AV_LOG_ERROR, "contrast: %d\n", contrast);
                 find_block_motion(deshake, src1, src2, x, y, stride, &mv);
                 if (mv.x != -1 && mv.y != -1) {
-                    counts[mv.x + deshake->rx][mv.y + deshake->ry]++;
+                     if ((n = counts[mv.x + deshake->rx][mv.y + deshake->ry]++) > count_max_value) {
+                          count_max_value = n;
+#ifdef EXPER01
+                          DESHAKE_WINNING_COUNT = count_max_value;
+                          DESHAKE_WINNING_MV.x = mv.x;
+                          DESHAKE_WINNING_MV.y = mv.y;
+#endif
+                     }
                     if (x > deshake->rx && y > deshake->ry) {
                         angles[pos++] = block_angle(x, y, 0, 0, &mv);
                     }
@@ -416,6 +440,7 @@ static void find_motion(DeshakeContext *deshake, uint8_t *src1, uint8_t *src2,
          t->angle = 0;
     }
 
+#if 0
     // Find the most common motion vector in the frame and use it as the gmv
     for (y = deshake->ry * 2; y >= 0; y--) {
         for (x = 0; x < deshake->rx * 2 + 1; x++) {
@@ -431,6 +456,7 @@ static void find_motion(DeshakeContext *deshake, uint8_t *src1, uint8_t *src2,
             }
         }
     }
+#endif
     p_x = (center_x - width / 2);
     p_y = (center_y - height / 2);
     t->vector.x += (cos(t->angle)-1)*p_x  -  sin(t->angle)   *p_y;
@@ -453,12 +479,12 @@ static void find_motion(DeshakeContext *deshake, uint8_t *src1, uint8_t *src2,
 #endif
 }
 
-/** Called by the system after all slices have been sent.
+/** Called by the system after all slices have been sent; All processing is done here.
  *
  * Callback called by the system.
  * @param link Definition of the link to the output of this filter instance.
- * @todo Check: is this the right place for this? The docs seem to say that
- * processing should happen in draw_slice
+ * @todo Check: Is this the right place for this? The docs seem to say that
+ * processing should happen in draw_slice()
  */
 static void end_frame(AVFilterLink *link)
 {
@@ -476,10 +502,10 @@ static void end_frame(AVFilterLink *link)
     int x, y;
     MotionVector start, end;  // For arrows.
     u_int32_t  *p_32_01, *p_32_02, *p_32_03;
-    if (DESHAKE_ZOOM >= 0)
-         t.zoom = orig.zoom = DESHAKE_ZOOM;
     static int fuss = 0;
     static int maxfuss = 5;
+    if (DESHAKE_ZOOM >= 0)
+         t.zoom = orig.zoom = DESHAKE_ZOOM;
     if (maxfuss && link != NULL && link->dstpad != NULL) {
 //         av_log(deshake,AV_LOG_ERROR,"%s %s %d: end_frame in link is at %p\n", __FILE__,__func__,__LINE__,link->dstpad->end_frame);
          maxfuss--;
@@ -517,9 +543,8 @@ static void end_frame(AVFilterLink *link)
 
 #ifdef EXPER01
     if (OPTMASK(OPT_LOG_BLOCK_VECTORS_LOOP_FINAL)) {
-         unsigned long counter=0;
          av_log(deshake,AV_LOG_ERROR,"%s %d: %8lu: %f %f %f   %f %f %f   %f %f %f   %f %f %ff\n", \
-                __func__,__LINE__,++counter, orig.vector.x, deshake->avg.vector.x, t.vector.x, orig.vector.y, deshake->avg.vector.y, t.vector.y, orig.angle, deshake->avg.angle, t.angle, orig.zoom, deshake->avg.zoom, t.zoom);
+                __func__,__LINE__, fcount, orig.vector.x, deshake->avg.vector.x, t.vector.x, orig.vector.y, deshake->avg.vector.y, t.vector.y, orig.angle, deshake->avg.angle, t.angle, orig.zoom, deshake->avg.zoom, t.zoom);
     }
 #endif
     // Generate a one-sided moving exponential average
@@ -534,9 +559,8 @@ static void end_frame(AVFilterLink *link)
     end.x = t.vector.x;
     end.y = t.vector.y;
     if (OPTMASK(OPT_LOG_BLOCK_VECTORS_LOOP_FINAL)) {
-         unsigned long counter=0;
          av_log(deshake,AV_LOG_ERROR,"%s %d: %8lu: %f %f %f   %f %f %f   %f %f %f   %f %f %f\n", \
-                __func__,__LINE__,++counter, orig.vector.x, deshake->avg.vector.x, t.vector.x, orig.vector.y, deshake->avg.vector.y, t.vector.y, orig.angle, deshake->avg.angle, t.angle, orig.zoom, deshake->avg.zoom, t.zoom);
+                __func__,__LINE__, fcount, orig.vector.x, deshake->avg.vector.x, t.vector.x, orig.vector.y, deshake->avg.vector.y, t.vector.y, orig.angle, deshake->avg.angle, t.angle, orig.zoom, deshake->avg.zoom, t.zoom);
     }
 #endif
     T_OP(t,-=,deshake->avg);  // Remove the average from the current motion to detect the motion that is not on purpose, just as jitter from bumping the camera
@@ -547,9 +571,8 @@ static void end_frame(AVFilterLink *link)
 
     // Write statistics to file if requested.
     if (deshake->fp) {
-         static unsigned long counter = 0;
-         statmsg = av_asprintf("%8lu: %12.4f  %12.4f  %12.4f    %12.4f  %12.4f  %12.4f    %12.4f  %12.4f  %12.4f    %12.4f  %12.4f  %12.4f\n", \
-                               ++counter, orig.vector.x, deshake->avg.vector.x, t.vector.x, orig.vector.y, deshake->avg.vector.y, t.vector.y, orig.angle, deshake->avg.angle, t.angle, orig.zoom, deshake->avg.zoom, t.zoom);
+         statmsg = av_asprintf("%8lu: %6.2f  %6.2f  %6.2f    %6.2f  %6.2f  %6.2f    %6.2f  %6.2f  %6.2f    %6.2f  %6.2f  %6.2f\n", \
+                               fcount, orig.vector.x, orig.vector.y, deshake->avg.vector.x, deshake->avg.vector.y, t.vector.x, t.vector.y, orig.angle, deshake->avg.angle, t.angle, orig.zoom, deshake->avg.zoom, t.zoom);
         fwrite(statmsg, sizeof(char), strlen(statmsg), deshake->fp);
 #ifdef EXPER01
         fflush(deshake->fp);
@@ -589,14 +612,13 @@ static void end_frame(AVFilterLink *link)
 
 #ifdef EXPER01
     {
-         int arrow_color = 50;
-         int highlight_color = 150;
+         int arrow_color = 224;
+         int highlight_color = 255;
          if (OPTMASK(OPT_BLANK_FRAME)) {
               // Put the conversion macros here for convenience; someone will want to use them someday, no doubt.
               int yp = RGB_TO_Y_CCIR(0, 0, 0);
               int u = RGB_TO_U_CCIR(0, 0, 0, 0);
               int v = RGB_TO_V_CCIR(0, 0, 0, 0);
-              unsigned long counter = 0;
               for (y = 0 ; y < CHROMA_HEIGHT(link) ; y++) {
                    for (x = 0 ; x < CHROMA_WIDTH(link) ; x++) {
                         out->data[1][y * out->linesize[1] + x] = u;
@@ -623,27 +645,35 @@ static void end_frame(AVFilterLink *link)
     avfilter_draw_slice(link->dst->outputs[0], 0, link->h, 1);
     avfilter_end_frame(link->dst->outputs[0]);
     avfilter_unref_buffer(out);
+#ifdef EXPER01
+    fcount++;
+#endif
 }
 
-/** Draw (optionally) per-block and final vectors. Part of test/development code.
+/** Draw (optionally) per-block and final vectors; Part of test/development code.
  *
  * Draw vectors over the output video to indicate what movement has been detected by the
- * functions above, and also vectors showing the results of the actual transform, relative
+ * motion-search functions, and also vectors showing the results of the actual transform relative
  * to the original position and also the current value of the exponential average.
- * @note See data for option mask in exper01.h for details of how this and the related
- * options, such as blanking the frame and null transform, and set and used.
+ *
+ * These operations are controlled by the command-line option-mask parameter.
+ *
+ * The individual block vectors are determined during the scanning and analysis in find_block_motion()
+ * and stored in a linked list that can thus be drawn over the transformed video later.
+ * @note There are test options available to blank the frame or do a null transform (preserving all functions except the actual video data transfer).
+ * This allows creating video of only the vectors, and also of the vectors overlaying the original video from which they were calculated.
+ * @see draw_vectors()
+ * @see find_block_motion()
  * @param deshake Description of this instance of the filter
- * @param avbuf Video data buffer for this frame
+ * @param avbuf Reference to the buffer containing the video data
  * @param w, h  Width and height of the frame
  * @param stride Distance within the video data from one line to the next
  * @param t Description of the affine tranform that has been performed on the data
- * @param orig <<<DESCRIPTION
+ * @param orig Tranform parameters before the transform is performed
  * @param normalizing_scale Scale factor to apply when user has requested normalization
- * @param color Value to add to luma data pixels when drawing the vector\
+ * @param color Value to add to luma data pixels when drawing the vector
  * @param highlight_color An alternative used to set a particular item apart from the others.
  */
-
-
 static void draw_vectors(DeshakeContext *deshake, AVFilterBufferRef *avbuf, int w, int h, int stride, Transform *t, Transform *orig, int normalizing_scale, int color, int highlight_color)
 {
      int i, j, final_vector_params[][2] = {
@@ -666,34 +696,31 @@ static void draw_vectors(DeshakeContext *deshake, AVFilterBufferRef *avbuf, int 
      arrow_root = NULL;
      if (OPTMASK(OPT_FINAL_VECTOR_ORIG_TO_FINAL) || OPTMASK(OPT_FINAL_VECTOR_AVG_TO_FINAL)) {
           static int fuss = 10;
-          if (fuss) {
+          if (fuss || OPTMASK(OPT_FLOAT_04)) {
                static unsigned long frame = 0;
                if (OPTMASK(OPT_FLOAT_03)) {
-                    av_log(deshake,AV_LOG_ERROR,"%s %d: %lu: orig x=%d, orig y=%d, avg x=%d, avg y=%d, final x=%d, final y=%d\n",
+                    av_log(deshake,AV_LOG_ERROR,"%s %4d: %6lu: orig x=%4d, orig y=%4d, avg x=%4d, avg y=%4d, final x=%4d, final y=%4d fcount =%6lu  icount =%6lu\n",
                            __func__,__LINE__,frame,
                            final_vector_params[1][0], final_vector_params[1][1], final_vector_params[0][0], final_vector_params[0][1],
-                           final_vector_params[2][0], final_vector_params[2][1]);
+                           final_vector_params[2][0], final_vector_params[2][1], fcount, icount);
                }
                fuss--;
                frame++;
           }
-          exper01_draw_line(avbuf, w/2 -10, h/2,     w/2 + 10, h/2,      w, h, stride, color); // Center cross
-          exper01_draw_line(avbuf, w/2,     h/2 -10, w/2,      h/2 + 10, w, h, stride, color);
-          // Normalizing
+          exper01_draw_line(avbuf, w/2 -10, h/2,     w/2 + 10, h/2,      w, h, stride, color/2); // Center cross
+          exper01_draw_line(avbuf, w/2,     h/2 -10, w/2,      h/2 + 10, w, h, stride, color/2);
+          // Scaling, sign, normalizing
           for (i = 0 ; i < 3 ; i++) {
                for (j = 0 ; j < 2 ; j++) {
-                    if (OPTMASK(OPT_FINAL_VECTORS_NORMALIZE)) {
-                         // av_log(deshake,AV_LOG_ERROR,"%s %d: normalizing factor = %d\n", __func__,__LINE__,normalizing_scale);
-                         final_vector_params[i][j] *= normalizing_scale;
-                    }
+                    final_vector_params[i][j] *= (OPTMASK(OPT_FINAL_VECTORS_NORMALIZE)) ? normalizing_scale : 1;
                     final_vector_params[i][j] += (j) ? h/2 : w/2 ;
                }
           }
           if (OPTMASK(OPT_FINAL_VECTOR_ORIG_TO_FINAL)) {
-               exper01_draw_arrow(avbuf, final_vector_params[2][0], final_vector_params[2][1], final_vector_params[1][0], final_vector_params[1][1], w, h, stride, highlight_color);
+               exper01_draw_arrow(avbuf, final_vector_params[1][0], final_vector_params[1][1], final_vector_params[2][0], final_vector_params[2][1], w, h, stride, highlight_color);
           }
           if (OPTMASK(OPT_FINAL_VECTOR_AVG_TO_FINAL)) {
-               exper01_draw_arrow(avbuf, final_vector_params[2][0], final_vector_params[2][1], final_vector_params[0][0], final_vector_params[0][1], w, h, stride, highlight_color);
+               exper01_draw_arrow(avbuf, final_vector_params[0][0], final_vector_params[0][1], final_vector_params[2][0], final_vector_params[2][1], w, h, stride, highlight_color);
           }
      }
 }
@@ -743,7 +770,7 @@ static double clean_mean(double *values, int count)
  * really only care about the high contrast blocks, so using this method we
  * can actually skip blocks we don't care much about.
  * @param src Video data to process (luma)
- * @param Location of the block
+ * @param x, y Location of the block
  * @param stride Distance within the data from one line to the next]
  * @param blocksize Size of the block
  * @param deshake Description of this instance of the filter
@@ -824,6 +851,7 @@ static av_cold int init(AVFilterContext *ctx, const char *args, void *opaque)
     deshake->cx = -1;
     deshake->cy = -1;
 #ifdef EXPER01
+    icount++;
     memset(&deshake->extra,0,sizeof(deshake->extra));
     deshake->extra.alpha = ALPHA_DEFAULT;
 #endif
@@ -858,8 +886,8 @@ static av_cold int init(AVFilterContext *ctx, const char *args, void *opaque)
     }
     if (*filename) {
          if ((deshake->fp = fopen(filename, "w")) != NULL) {
-              statmsg = av_asprintf("          %12s  %12s  %12s    %12s  %12s  %12s    %12s  %12s  %12s    %12s  %12s  %12s\n\n",
-                                    "Orig x", "Avg x", "Final x", "Orig y", "Avg y", "Final y", "Orig angle", "Avg angle", "Final angle", "Orig zoom", "Avg zoom", "Final zoom");
+              statmsg = av_asprintf("          %7s %7s %7s   %7s %7s %7s   %7s %7s %7s   %7s %7s %7s\n\n",
+                                    "Or x", "Or y", "Av x", "Av y", "Fin x", "Fin y", "Or ang", "Av ang", "Fin ang", "Or zm", "Av zm", "Fin zm");
               fwrite(statmsg, sizeof(char), strlen(statmsg), deshake->fp);
 #ifdef EXPER01
               fflush(deshake->fp);
@@ -884,7 +912,7 @@ static av_cold int init(AVFilterContext *ctx, const char *args, void *opaque)
            deshake->rx, deshake->ry, deshake->edge, deshake->blocksize * 2, deshake->contrast, deshake->search, DESHAKE_ZOOM,
            (unsigned long)p_32_01[1], (unsigned long)p_32_01[0], DESHAKE_ALPHA, (*filename? "  log file: " : " oh "), (*filename? filename : " no "));
     if (deshake->extra.optmask) {
-         av_log(NULL,AV_LOG_VERBOSE,"Enabled deshake options: ");
+         av_log(ctx,AV_LOG_VERBOSE,"Enabled deshake options: ");
          for (i = 0 ; i < get_n_optmask_selections() ; i++) {
               osp = &optmask_selections[i];
               if (deshake->extra.optmask & osp->mask) {
@@ -909,7 +937,7 @@ static av_cold int init(AVFilterContext *ctx, const char *args, void *opaque)
  * the in_formats/in_chlayouts for links connected to its output pads,
  * and out_formats/out_chlayouts for links connected to its input pads.
  *
- * @param cts Description of this instance
+ * @param ctx Description of this instance
  * @return zero on success, a negative value corresponding to an
  * AVERROR code otherwise
  */
@@ -939,7 +967,7 @@ static int config_props(AVFilterLink *link)
     DeshakeContext *deshake = link->dst->priv;
 
     deshake->ref = NULL;
-    T_SET(last, 0);
+    T_SET(deshake->last, =,  0);
     deshake->avctx = avcodec_alloc_context3(NULL);
     dsputil_init(&deshake->c, deshake->avctx);
 
@@ -957,8 +985,8 @@ static av_cold void uninit(AVFilterContext *ctx)
 }
 
 /**
- * Draw a slice (no kiddin');
- * @note Docs say processing should happen here, not in end_frame. Check up on this
+ * Draw a slice (unused);
+ * @todo Docs say processing should happen here, not in end_frame; check up on this.
  */
 static void draw_slice(AVFilterLink *link, int y, int h, int slice_dir)
 {

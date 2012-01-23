@@ -56,9 +56,6 @@ enum FillMethod {
     FILL_COUNT,         //< Number of edge fill methods
 };
 
-// Shortcuts for fill methods
-#define FILL_DEFAULT FILL_ORIGINAL
-
 /**
  * Get an affine transformation matrix from a given translation, rotation, and
  * zoom factor. The matrix will look like:
@@ -107,16 +104,16 @@ void avfilter_mul_matrix(const float *m1, float scalar, float *result);
  * multiplies each vector [x,y,1] by the matrix and then interpolates to
  * get the final value.
  *
- * @param src         source image
- * @param dst         destination image
- * @param src_stride  source image line size in bytes
- * @param dst_stride  destination image line size in bytes
- * @param width       image width in pixels
- * @param height      image height in pixels
- * @param matrix      9-item affine transformation matrix
- * @param default     value for pixels outside the transformed image when FILL_BLANK chosen
- * @param interpolate pixel interpolation method
- * @param fill        edge fill method
+ * @param src            source image
+ * @param dst            destination image
+ * @param src_stride     source image line size in bytes
+ * @param dst_stride     destination image line size in bytes
+ * @param width          image width in pixels
+ * @param height         image height in pixels
+ * @param matrix         9-value affine transformation matrix
+ * @param blank_default  value for pixels outside the transformed image when FILL_BLANK chosen
+ * @param interpolate    pixel interpolation method
+ * @param fill           edge fill method
  */
 void avfilter_transform(const uint8_t *src, uint8_t *dst,
                         int src_stride, int dst_stride,

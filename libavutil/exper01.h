@@ -112,7 +112,13 @@ typedef struct {
 } IntMotionVector;
 
 
-/** Extras tacked onto DeshakeContext for testing */
+/** Extras tacked onto DeshakeContext for testing
+ * @param zoom A user-settable zoom to override the default
+ * @param optmask Mask to control individual functions throughout the code
+ * @param imvs fribbble
+ * @param n_valid_imvs snarfle
+ * @param 
+ */
 typedef struct {
      int zoom;   // Manually-set test value using integer percentages.
      u_int64_t  optmask;  // Bit mask for on-off devel/debug options.

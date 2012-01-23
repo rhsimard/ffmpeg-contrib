@@ -64,6 +64,9 @@ int global_option_04;
  * @param stride stride/linesize of the image
  * @param color color of the arrow
  * @todo  Change color arg to packed RGB levels; handle all pix formats.
+ * @todo  Shadow/background
+ * @todo  Draw modes: add, invert, solid, etc.
+ * @todo  Styles: dashed, dotted, solid, similar to CSS.
  * @note  This is a highly efficient algorithm, using only addition, subtraction,
  * increment and comparison operations in the drawing loop.
  */
@@ -90,6 +93,7 @@ void exper01_draw_line(AVFilterBufferRef *avbuf, int sx, int sy, int ex, int ey,
      sy = av_clip(sy, 0, h - 1);
      ex = av_clip(ex, 0, w - 1);
      ey = av_clip(ey, 0, h - 1);
+     color = av_clip(color, 0, 255);
 
      if (FFABS(ey - sy) > FFABS(ex - sx)) {
           p_smax = &sy;
@@ -119,7 +123,7 @@ void exper01_draw_line(AVFilterBufferRef *avbuf, int sx, int sy, int ex, int ey,
      abs_deltamin = abs(deltamin);
      incr_min *= FFSIGN(deltamin);
      for ( ; *p_smax <= *p_emax ; (*p_smax)++) {
-          *buf   += color;
+          *buf   = color;
           if ((tmin += abs_deltamin) >= deltamax) {
                tmin -= deltamax;
                buf += incr_min;
@@ -147,10 +151,13 @@ void exper01_draw_arrow(AVFilterBufferRef *avbuf, int sx, int sy, int ex,
 
 #define ARROWHEAD_SIZE (5)
 
-     sx = av_clip(sx, -100, w + 100);
-     sy = av_clip(sy, -100, h + 100);
-     ex = av_clip(ex, -100, w + 100);
-     ey = av_clip(ey, -100, h + 100);
+     int sxm = sx-1, sym = sy+1, exm=ex-1, eym=ey+1;
+
+     sx = av_clip(sx, 2, w-2);
+     sy = av_clip(sy, 2, h-2);
+     ex = av_clip(ex, 2, w-2);
+     ey = av_clip(ey, 2, h-2);
+     color = av_clip(color,0,255);
 
      dx = ex - sx;
      dy = ey - sy;
@@ -164,6 +171,8 @@ void exper01_draw_arrow(AVFilterBufferRef *avbuf, int sx, int sy, int ex,
           rx = ROUNDED_DIV(rx * ARROWHEAD_SIZE << 4, length);
           ry = ROUNDED_DIV(ry * ARROWHEAD_SIZE << 4, length);
 
+          exper01_draw_line(avbuf, sxm, sym, sxm + rx, sym + ry, w, h, stride, 256-color);
+          exper01_draw_line(avbuf, sxm, sym, sxm - ry, sym + rx, w, h, stride, 256-color);
           exper01_draw_line(avbuf, sx, sy, sx + rx, sy + ry, w, h, stride, color);
           exper01_draw_line(avbuf, sx, sy, sx - ry, sy + rx, w, h, stride, color);
      }

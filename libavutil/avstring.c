@@ -25,6 +25,7 @@
 #include <ctype.h>
 #include "avstring.h"
 #include "mem.h"
+#include "libavutil/special_debug.h"
 
 int av_strstart(const char *str, const char *pfx, const char **ptr)
 {
@@ -95,24 +96,34 @@ char *av_asprintf(const char *fmt, ...)
 {
     char *p = NULL;
     va_list va;
-    int len;
 
     va_start(va, fmt);
-    len = vsnprintf(NULL, 0, fmt, va);
+    p = av_vasprintf(fmt, va);
     va_end(va);
+    return(p);
+}
+
+char *av_vasprintf(const char *fmt, va_list va)
+{
+    char *p = NULL;
+    va_list va2;
+    int len;
+    
+    va_copy(va2,va);
+    len = vsnprintf(NULL, 0, fmt, va2);
+    va_end(va2);
+
     if (len < 0)
         goto end;
 
-    p = av_malloc(len + 1);
+    p = av_malloc(len + 2);
     if (!p)
         goto end;
 
-    va_start(va, fmt);
     len = vsnprintf(p, len + 1, fmt, va);
-    va_end(va);
+
     if (len < 0)
         av_freep(&p);
-
 end:
     return p;
 }
@@ -162,7 +173,7 @@ char *av_get_token(const char **buf, const char *term)
 
 char *av_strtok(char *s, const char *delim, char **saveptr)
 {
-    char *tok;
+    char *tok=NULL;
 
     if (!s && !(s = *saveptr))
         return NULL;
@@ -175,10 +186,12 @@ char *av_strtok(char *s, const char *delim, char **saveptr)
         *saveptr = NULL;
         return NULL;
     }
+
     tok = s++;
 
     /* skip non delimiters */
     s += strcspn(s, delim);
+
     if (*s) {
         *s = 0;
         *saveptr = s+1;

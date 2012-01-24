@@ -129,7 +129,7 @@ char *av_asprintf(const char *fmt, ...) av_printf_format(1, 2);
 /**
  * Print arguments following specified format into an auto-allocated
  * buffer of sufficient size to contain the result.  This is the
- * companion to the variadic av_asprintf, but which uses the 
+ * companion to the variadic av_asprintf, but which uses the
  * argument list variable created by av_start.
  * @param fmt printf-compatible format string, specifying how the
  *            following parameters are used.

@@ -25,7 +25,7 @@
 #include <ctype.h>
 #include "avstring.h"
 #include "mem.h"
-#include "libavutil/special_debug.h"
+
 
 int av_strstart(const char *str, const char *pfx, const char **ptr)
 {

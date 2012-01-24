@@ -11,6 +11,8 @@
 #define EXPER01
 #include <stdint.h>
 #include <sys/types.h>
+#include <time.h>
+#include <sys/time.h>
 #include "libavfilter/avfilter.h"
 
 /**
@@ -52,13 +54,19 @@ enum opt_select { OPT_NULL_TRANSFORM,
                   OPT_FINAL_VECTOR_ORIG_TO_FINAL,
                   OPT_FINAL_VECTOR_AVG_TO_FINAL,
                   OPT_FINAL_VECTORS_NORMALIZE,
+                  OPT_LOG_CALL_FIND_BLOCK_MOTION,
                   OPT_LOG_BLOCK_VECTORS_INNER_LOOP,
                   OPT_LOG_BLOCK_VECTORS_LOOP_FINAL,
-                  OPT_LOG_FIND_BLOCK_MOTION_FINAL,
-                  OPT_LOG_SEARCH_LOOP,
-                  OPT_LOG_SECONDARY_SEARCH_LOOP,
-                  OPT_LOG_SECONDARY_SEARCH_LOOP_END,
                   OPT_LOG_FIND_MOTION_FINAL,
+                  OPT_LOG_FIND_BLOCK_MOTION_EXHAUSTIVE_LOOP,
+                  OPT_LOG_FIND_BLOCK_MOTION_SMART_EXHAUSTIVE_LOOP,
+                  OPT_LOG_FIND_BLOCK_MOTION_FINAL,
+                  OPT_LOG_POST_FIND_MOTION_01,
+                  OPT_LOG_POST_FIND_MOTION_02,
+                  OPT_LOG_POST_FIND_MOTION_03,
+                  OPT_LOG_POST_FIND_MOTION_04,
+                  OPT_USE_TIME_TRACK,
+                  OPT_DUMP_TIME_TRACK,
                   OPT_GLOBAL_01,
                   OPT_GLOBAL_02,
                   OPT_GLOBAL_03,
@@ -162,4 +170,52 @@ int opt_exper01_options(const char *opt, const char *arg);
  */
 int get_n_optmask_selections(void);
 
+/**
+ * Element of linked list of time markers.
+ *
+ * The time at various stages of the process is measured and stored for later
+ * display and analysis.
+ */
+typedef struct s_timetrack {
+     struct timeval      tv;                   /** timestamp                               */
+     const  char        *func;                 /** function name                           */
+     const  char        *file;                 /** filename                                */
+     int                 line;                 /** line number                             */
+     const char         *label, *descr;        /** an identifying label, optional descriptive information */
+     struct s_timetrack *next, *previous;      /** links                                   */
+}TimeTrack;
+
+extern int use_time_track;
+
+/** Add a time marker to the linked list.
+ *
+ * Adds a record of the time and optional text
+ * @param filename     Name of source file
+ * @param func         Name of function
+ * @param line         Line number
+ * @param label        An identifying label
+ * @param fmt          printf-style format string
+ * @param ...          Variadic args
+ * @return             Pointer to the object
+ */
+TimeTrack *add_time_marker(const char *filename, const char* func, int line, const char* label, const char* fmt, ...);
+/** Add a time marker to the linked list (va_list version). */
+TimeTrack *vadd_time_marker(const char *filename, const char* func, int line, const char* label, const char* fmt, va_list va);
+
+/** Log the contents of a time marker.
+ *
+ * @param marker  Pointer to the time marker
+ */
+void dump_time_marker(const TimeTrack *marker);
+
+/** Log the markers in the time track.
+ *
+ * @param tt  Pointer to the first marker to dump.  If null, dump the entire track.
+ */
+void dump_time_track(const TimeTrack *tt);
+
+/** Delete the time track and free memory allocated to it. */
+void delete_time_track(void);
+
+#define ADDTIME(label,fmt,...) add_time_marker(__FILE__,__func__,__LINE__,label,fmt, ##__VA_ARGS__)
 #endif

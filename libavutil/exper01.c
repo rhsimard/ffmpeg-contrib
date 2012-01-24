@@ -16,6 +16,7 @@
 
 
 #include "libavfilter/avfilter.h"
+#include "libavutil/avstring.h"
 #include "libavutil/exper01.h"
 
 OptmaskSelection optmask_selections[] =
@@ -27,13 +28,19 @@ OptmaskSelection optmask_selections[] =
      { 0x0000000000000010, "final vector orig to final"       , "draw final vector from orig.vector to t.vector"       },
      { 0x0000000000000020, "final vector avg to final"        , "draw final vector from avg.vector to t.vector"        },
      { 0x0000000000000040, "final vector normalize"           , "normalize final vectors"                              },
-     { 0x0000000000000080, "log block vectors inner loop"     , "log inner loop of block-vector function"              },
-     { 0x0000000000000100, "log block vectors final"          , "log final stage of block-vector generation"           },
-     { 0x0000000000000200, "log find_block_motion final"      , "log find_block_motion final"                          },
-     { 0x0000000000000400, "log exhaustive loop"              , "log exhaustive-check search loop"                     },
-     { 0x0000000000000800, "log smart search loop"            , "log smart-exhaustive-check search loop"               },
-     { 0x0000000000001000, "log exhaustive loop final"        , "log smart-exhaustive-check loop final"                },
-     { 0x0000000000002000, "log find_motion final"            , "log find_motion final"                                },
+     { 0x0000000000000080, "log call find_block_motion"       , "log call find_block_motion, returned motion vector"   },
+     { 0x0000000000000100, "log block vectors inner loop"     , "log inner loop of block-vector function"              },
+     { 0x0000000000000200, "log block vectors final"          , "log final stage of block-vector generation"           },
+     { 0x0000000000000400, "log find_motion final"            , "log find_motion final"                                },
+     { 0x0000000000000800, "log exhaustive loop"              , "log exhaustive search loop"                           },
+     { 0x0000000000001000, "log smart-exhaustive loop"        , "log smart-exhaustive search loop"                     },
+     { 0x0000000000002000, "log find_block_motion final"      , "log find_block_motion final"                          },
+     { 0x0000000000004000, "log post find motion 01"          , "log processing following find_motion pt. 01"          },
+     { 0x0000000000008000, "log post find motion 02"          , "log processing following find_motion pt. 02"          },
+     { 0x0000000000010000, "log post find motion 03"          , "log processing following find_motion pt. 03"          },
+     { 0x0000000000020000, "log post find motion 04"          , "log processing following find_motion pt. 04"          },
+     { 0x0000000000040000, "use time track"                   , "enable the generation of time markers"                },
+     { 0x0000000000080000, "dump time track"                  , "dump the time track after processing"                 },
      { 0x0010000000000000, "global option 01"                 , "enable global option 01"                              },
      { 0x0020000000000000, "global option 02"                 , "enable global option 02"                              },
      { 0x0040000000000000, "global option 03"                 , "enable global option 03"                              },
@@ -203,5 +210,87 @@ int opt_exper01_options(const char *opt, const char *arg)
 int get_n_optmask_selections(void)
 {
      return n_optmask_selections;
+}
+
+////////////// Time markers
+static TimeTrack *timetrack_root;
+int use_time_track = 0;
+
+TimeTrack *add_time_marker(const char *filename, const char* func, int line, const char* label, const char* fmt, ...)
+{
+     TimeTrack *retval = NULL;
+
+     if (use_time_track) {
+          va_list va;
+          va_start(va,fmt);
+          retval = vadd_time_marker(filename, func, line, label, fmt, va);
+          va_end(va);
+     }
+     return(retval);
+}
+
+TimeTrack *vadd_time_marker(const char *filename, const char* func, int line, const char* label, const char* fmt, va_list va)
+{
+     TimeTrack *retval = NULL, *troot, *prev, **prevlink;
+
+     if (use_time_track) {
+          prevlink = &timetrack_root;
+          prev = timetrack_root;
+          for (troot = timetrack_root ; troot ; troot=troot->next) {
+               prev = troot;
+               prevlink = &troot->next;
+          }
+          retval = *prevlink;
+          if ((retval = (TimeTrack*) av_malloc(sizeof(TimeTrack))) == NULL) {
+               av_log(NULL,AV_LOG_ERROR,"Memory allocation failure in %s %s %d: %s\n", __FILE__, __func__, __LINE__, strerror(errno));
+               return NULL;
+          }
+          memset(retval,0,sizeof(TimeTrack));
+          if (gettimeofday(&retval->tv,NULL) < 0) {
+               av_log(NULL,AV_LOG_ERROR,"%s %s %d: gettimeofday() failed: %s\n", __FILE__, __func__, __LINE__, strerror(errno));
+               return NULL;
+          }
+          retval->previous = prev;
+          retval->file = filename;
+          retval->func = func;
+          retval->line = line;
+          retval->label = label;
+          retval->descr = av_vasprintf(fmt,va);
+     }
+     return(retval);
+}
+
+void dump_time_marker(const TimeTrack *marker)
+{
+     av_log(NULL,AV_LOG_INFO,"Time marker %s: file: %s function: %s  line: %d  time = %12lu   %s\n", (marker->label? marker->label : ""), marker->file, marker->func, marker->line,
+            (unsigned long)marker->tv.tv_usec, marker->descr);
+}
+
+void dump_time_track(const TimeTrack *tt)
+{
+     const TimeTrack *tti;
+     for (tti = (tt == NULL)? timetrack_root : tt; tt ; tt = tt->next) {
+          dump_time_marker(tti);
+     }
+}
+
+static int delete_time_track_r(TimeTrack *root, int n);
+void delete_time_track(void)
+{
+     int n = delete_time_track_r(timetrack_root, 0);
+     av_log(NULL,AV_LOG_INFO,"Time track cleared; %d items\n", n);
+}
+
+static int delete_time_track_r(TimeTrack *root, int n)
+{
+     int rn = -1;
+     if (root != NULL)
+     {
+          rn = delete_time_track_r(root->next, n+1);
+          if (root->descr)
+               av_free(root->descr);
+          av_free(root);
+     }
+     return rn;
 }
 

@@ -211,6 +211,86 @@ static int cmp(const double *a, const double *b)
 
 
 /**
+ * Cleaned mean (cuts off 20% of values to remove outliers and then averages)
+ *
+ * @param values Array of values to process
+ * @param count Number of values in the array
+ * @return The calculated mean
+ */
+static double clean_mean(double *values, int count)
+{
+    double mean = 0;
+    int cut = count / 5;
+    int x;
+
+    if (count < 2)
+         return(values[0]);
+    qsort(values, count, sizeof(double), (void*)cmp);
+
+    for (x = cut; x < count - cut; x++) {
+        mean += values[x];
+    }
+
+    return mean / (count - cut * 2);
+}
+
+/**
+ * Calculate the contrast for a given block.
+ *
+ * When searching for global motion we
+ * really only care about the high contrast blocks, so using this method we
+ * can actually skip blocks we don't care much about.
+ * @param src Video data to process (luma)
+ * @param x, y Location of the block
+ * @param stride Distance within the data from one line to the next]
+ * @param blocksize Size of the block
+ * @param deshake Description of this instance of the filter
+ * @return Calculated contrast value
+ */
+#ifdef EXPER01
+static int block_contrast(uint8_t *src, int x, int y, int stride, int blocksize, DeshakeContext *deshake)
+#else
+static int block_contrast(uint8_t *src, int x, int y, int stride, int blocksize, DeshakeContext)
+#endif
+{
+    int highest = 0;
+    int lowest = 0;
+    int i, j, pos;
+
+    for (i = 0; i <= blocksize * 2; i++) {
+        // We use a width of 16 here to match the libavcodec sad functions
+        for (j = 0; i <= 15; i++) {
+            pos = (y - i) * stride + (x - j);
+            if (src[pos] < lowest)
+                lowest = src[pos];
+            else if (src[pos] > highest) {
+                highest = src[pos];
+            }
+        }
+    }
+
+    return highest - lowest;
+}
+
+/**
+ * Find the rotation for a given block.
+ * <<<<<<<< DO THIS
+ */
+static double block_angle(int x, int y, int cx, int cy, IntMotionVector *shift)
+{
+    double a1, a2, diff;
+
+    a1 = atan2(y - cy, x - cx);
+    a2 = atan2(y - cy + shift->y, x - cx + shift->x);
+
+    diff = a2 - a1;
+
+    return (diff > M_PI)  ? diff - 2 * M_PI :
+           (diff < -M_PI) ? diff + 2 * M_PI :
+           diff;
+}
+
+/**
  * Find the most likely shift in motion between two frames for a given
  * macroblock.
  *
@@ -474,6 +554,14 @@ static void find_motion(DeshakeContext *deshake, uint8_t *src1, uint8_t *src2,
      }
      ADDTIME("exit","");
 #endif
+}
+
+/**
+ * Draw a slice (unused);
+ * @todo Docs say processing should happen here, not in end_frame; check up on this.
+ */
+static void draw_slice(AVFilterLink *link, int y, int h, int slice_dir)
+{
 }
 
 /** All processing done here; see full description.
@@ -756,94 +844,6 @@ static void draw_vectors_r(DeshakeContext *deshake, const ArrowAnnotation *root,
           draw_vectors_r(deshake, root->next, avbuf, w, h, stride, normalizing_scale, color, highlight_color);
           av_free(root);
      }
-}
-
-/**
- * Draw a slice (unused);
- * @todo Docs say processing should happen here, not in end_frame; check up on this.
- */
-static void draw_slice(AVFilterLink *link, int y, int h, int slice_dir)
-{
-}
-
-/**
- * Cleaned mean (cuts off 20% of values to remove outliers and then averages)
- *
- * @param values Array of values to process
- * @param count Number of values in the array
- * @return The calculated mean
- */
-static double clean_mean(double *values, int count)
-{
-    double mean = 0;
-    int cut = count / 5;
-    int x;
-
-    if (count < 2)
-         return(values[0]);
-    qsort(values, count, sizeof(double), (void*)cmp);
-
-    for (x = cut; x < count - cut; x++) {
-        mean += values[x];
-    }
-
-    return mean / (count - cut * 2);
-}
-
-/**
- * Calculate the contrast for a given block.
- *
- * When searching for global motion we
- * really only care about the high contrast blocks, so using this method we
- * can actually skip blocks we don't care much about.
- * @param src Video data to process (luma)
- * @param x, y Location of the block
- * @param stride Distance within the data from one line to the next]
- * @param blocksize Size of the block
- * @param deshake Description of this instance of the filter
- * @return Calculated contrast value
- */
-#ifdef EXPER01
-static int block_contrast(uint8_t *src, int x, int y, int stride, int blocksize, DeshakeContext *deshake)
-#else
-static int block_contrast(uint8_t *src, int x, int y, int stride, int blocksize, DeshakeContext)
-#endif
-{
-    int highest = 0;
-    int lowest = 0;
-    int i, j, pos;
-
-    for (i = 0; i <= blocksize * 2; i++) {
-        // We use a width of 16 here to match the libavcodec sad functions
-        for (j = 0; i <= 15; i++) {
-            pos = (y - i) * stride + (x - j);
-            if (src[pos] < lowest)
-                lowest = src[pos];
-            else if (src[pos] > highest) {
-                highest = src[pos];
-            }
-        }
-    }
-
-    return highest - lowest;
-}
-
-/**
- * Find the rotation for a given block.
- * <<<<<<<< DO THIS
- */
-static double block_angle(int x, int y, int cx, int cy, IntMotionVector *shift)
-{
-    double a1, a2, diff;
-
-    a1 = atan2(y - cy, x - cx);
-    a2 = atan2(y - cy + shift->y, x - cx + shift->x);
-
-    diff = a2 - a1;
-
-    return (diff > M_PI)  ? diff - 2 * M_PI :
-           (diff < -M_PI) ? diff + 2 * M_PI :
-           diff;
 }
 
 /**

@@ -22,38 +22,38 @@
 
 OptmaskSelection optmask_selections[] =
 {
-     { 0x0000000000000001, "null transform"                   , "null transform"                                       },
-     { 0x0000000000000002, "blank frame"                      , "blank frame"                                          },
-     { 0x0000000000000004, "block vectors"                    , "draw block vectors"                                   },
-     { 0x0000000000000008, "block vector normalize"           , "normalize block vectors"                              },
-     { 0x0000000000000010, "final vector orig to final"       , "draw final vector from orig.vector to t.vector"       },
-     { 0x0000000000000020, "final vector avg to final"        , "draw final vector from avg.vector to t.vector"        },
-     { 0x0000000000000040, "final vector normalize"           , "normalize final vectors"                              },
-     { 0x0000000000000080, "log call find_block_motion"       , "log call find_block_motion, returned motion vector"   },
-     { 0x0000000000000100, "log block vectors inner loop"     , "log inner loop of block-vector function"              },
-     { 0x0000000000000200, "log block vectors final"          , "log final stage of block-vector generation"           },
-     { 0x0000000000000400, "log find_motion final"            , "log find_motion final"                                },
-     { 0x0000000000000800, "log exhaustive loop"              , "log exhaustive search loop"                           },
-     { 0x0000000000001000, "log smart-exhaustive loop"        , "log smart-exhaustive search loop"                     },
-     { 0x0000000000002000, "log find_block_motion final"      , "log find_block_motion final"                          },
-     { 0x0000000000004000, "log post find motion 01"          , "log processing following find_motion pt. 01"          },
-     { 0x0000000000008000, "log post find motion 02"          , "log processing following find_motion pt. 02"          },
-     { 0x0000000000010000, "log post find motion 03"          , "log processing following find_motion pt. 03"          },
-     { 0x0000000000020000, "log post find motion 04"          , "log processing following find_motion pt. 04"          },
-     { 0x0000000000040000, "use time track"                   , "enable the generation of time markers"                },
-     { 0x0000000000080000, "dump time track"                  , "dump the time track after processing"                 },
-     { 0x0010000000000000, "global option 01"                 , "enable global option 01"                              },
-     { 0x0020000000000000, "global option 02"                 , "enable global option 02"                              },
-     { 0x0040000000000000, "global option 03"                 , "enable global option 03"                              },
-     { 0x0080000000000000, "global option 04"                 , "enable global option 04"                              },
-     { 0x0100000000000000, "floating switch 01"               , "floating switch 01"                                   },
-     { 0x0200000000000000, "floating switch 02"               , "floating switch 02"                                   },
-     { 0x0400000000000000, "floating switch 03"               , "floating switch 03"                                   },
-     { 0x0800000000000000, "floating switch 04"               , "floating switch 04"                                   },
-     { 0x1000000000000000, "floating switch 05"               , "floating switch 05"                                   },
-     { 0x2000000000000000, "floating switch 06"               , "floating switch 06"                                   },
-     { 0x4000000000000000, "floating switch 07"               , "floating switch 07"                                   },
-     { 0x8000000000000000, "floating switch 08"               , "floating switch 08"                                   }
+     { 0x0000000000000001, "null transform"                   , "null transform"                                                                 },
+     { 0x0000000000000002, "blank frame"                      , "blank frame"                                                                    },
+     { 0x0000000000000004, "block vectors"                    , "draw block vectors"                                                             },
+     { 0x0000000000000008, "block vector normalize"           , "normalize block vectors"                                                        },
+     { 0x0000000000000010, "final vector orig to final"       , "draw final vector from orig.vector to t.vector"                                 },
+     { 0x0000000000000020, "final vector avg to final"        , "draw final vector from avg.vector to t.vector"                                  },
+     { 0x0000000000000040, "final vector normalize"           , "normalize final vectors"                                                        },
+     { 0x0000000000000080, "log call find_block_motion"       , "log call find_block_motion, returned motion vector"                             },
+     { 0x0000000000000100, "log block vectors inner loop"     , "log inner loop of block-vector function"                                        },
+     { 0x0000000000000200, "log block vectors final"          , "log final stage of block-vector generation"                                     },
+     { 0x0000000000000400, "log find_motion final"            , "log find_motion final"                                                          },
+     { 0x0000000000000800, "log exhaustive loop"              , "log exhaustive search loop"                                                     },
+     { 0x0000000000001000, "log smart-exhaustive loop"        , "log smart-exhaustive search loop"                                               },
+     { 0x0000000000002000, "log find_block_motion final"      , "log find_block_motion final"                                                    },
+     { 0x0000000000004000, "log post find motion 01"          , "log processing following find_motion pt. 01"                                    },
+     { 0x0000000000008000, "log post find motion 02"          , "log processing following find_motion pt. 02"                                    },
+     { 0x0000000000010000, "log post find motion 03"          , "log processing following find_motion pt. 03"                                    },
+     { 0x0000000000020000, "log post find motion 04"          , "log processing following find_motion pt. 04"                                    },
+     { 0x0000000000040000, "use time track list"              , "enable the generation of time marker linked list"                               },
+     { 0x0000000000080000, "dump time track"                  , "dump time marker or full track, depending on 'use time track list' option"      },
+     { 0x0010000000000000, "global option 01"                 , "enable global option 01"                                                        },
+     { 0x0020000000000000, "global option 02"                 , "enable global option 02"                                                        },
+     { 0x0040000000000000, "global option 03"                 , "enable global option 03"                                                        },
+     { 0x0080000000000000, "global option 04"                 , "enable global option 04"                                                        },
+     { 0x0100000000000000, "floating switch 01"               , "floating switch 01"                                                             },
+     { 0x0200000000000000, "floating switch 02"               , "floating switch 02"                                                             },
+     { 0x0400000000000000, "floating switch 03"               , "floating switch 03"                                                             },
+     { 0x0800000000000000, "floating switch 04"               , "floating switch 04"                                                             },
+     { 0x1000000000000000, "floating switch 05"               , "floating switch 05"                                                             },
+     { 0x2000000000000000, "floating switch 06"               , "floating switch 06"                                                             },
+     { 0x4000000000000000, "floating switch 07"               , "floating switch 07"                                                             },
+     { 0x8000000000000000, "floating switch 08"               , "floating switch 08"                                                             }
 };
 
 static int n_optmask_selections = sizeof(optmask_selections)/sizeof(OptmaskSelection);
@@ -215,80 +215,103 @@ int get_n_optmask_selections(void)
 
 ////////////// Time markers
 static TimeTrack *timetrack_root;
-int use_time_track = 0;
 
-TimeTrack *add_time_marker(const char *filename, const char* func, int line, const char* label, const char* fmt, ...)
+#define CLEAR_MARKER(p_marker)                 \
+     do {                                      \
+          if (p_marker) {                      \
+               if (p_marker->descr)            \
+                    av_free(p_marker->descr);  \
+               av_freep(&(p_marker));          \
+               }                               \
+     } while(0)
+
+const TimeTrack *add_time_marker(DeshakeContextExtra *dcx, const char *filename, const char* func, int line, const char* label, const char* fmt, ...)
 {
      TimeTrack *retval = NULL;
+     va_list va;
 
-     if (use_time_track) {
-          va_list va;
-          va_start(va,fmt);
-          retval = vadd_time_marker(filename, func, line, label, fmt, va);
-          va_end(va);
+     if (!(dcx->optmask & (OPTMASK_VAL(OPT_USE_TIME_TRACK_LINKED_LIST) | OPTMASK_VAL(OPT_DUMP_TIME_TRACK)))) {
+          return NULL;
      }
+     va_start(va,fmt);
+     retval = vadd_time_marker(dcx, filename, func, line, label, fmt, va);
+     va_end(va);
      return(retval);
 }
 
-TimeTrack *vadd_time_marker(const char *filename, const char* func, int line, const char* label, const char* fmt, va_list va)
+const TimeTrack *vadd_time_marker(DeshakeContextExtra *dcx, const char *filename, const char* func, int line, const char* label, const char* fmt, va_list va)
 {
      TimeTrack *retval=NULL, *troot, *prev = NULL, **prevlink;
      int n_marker = 1;
+     struct timeval now;
 
-     if (use_time_track) {
-          prevlink = &timetrack_root;
+     if (!(dcx->optmask & (OPTMASK_VAL(OPT_USE_TIME_TRACK_LINKED_LIST) | OPTMASK_VAL(OPT_DUMP_TIME_TRACK)))) {
+          return NULL;
+     }
+     if (dcx == NULL) {
+          av_log(NULL,AV_LOG_ERROR,"%s %s %d (from %s %s %d): Context-extras pointer is NULL.\n", __FILE__,__func__,__LINE__,filename,func,line);
+          return NULL;
+     }
+     if (gettimeofday(&now,NULL) < 0) {
+          av_log(NULL,AV_LOG_ERROR,"%s %s %d: gettimeofday() failed: %s\n", __FILE__, __func__, __LINE__, strerror(errno));
+          return NULL;
+     }
+     if (dcx->tvs[0].tv_sec == 0) {
+          // First one
+          dcx->tvs[0] = now;
+     }
+     // If the linked list is selected, create the record and append it to the list; otherwise, operate on the sole item at the root.
+     prevlink = &timetrack_root;
+     if (OPTMASK_G(dcx->optmask,OPT_USE_TIME_TRACK_LINKED_LIST)) {
           for (troot = timetrack_root ; troot ; troot=troot->next) {
                n_marker++;
                prev = troot;
                prevlink = &troot->next;
           }
+     }
+     // If using the linked list, prevlink points to the location where the pointer to the new record should be written.  If not,
+     // it points to the root, which is NULL when the first marker is created.
+     if (*prevlink == NULL) {
           if ((retval = (TimeTrack*) av_malloc(sizeof(TimeTrack))) == NULL) {
                av_log(NULL,AV_LOG_ERROR,"Memory allocation failure in %s %s %d: %s\n", __FILE__, __func__, __LINE__, strerror(errno));
                return NULL;
           }
           *prevlink = retval;
-          memset(retval,0,sizeof(TimeTrack));
-          if (gettimeofday(&retval->tv,NULL) < 0) {
-               av_log(NULL,AV_LOG_ERROR,"%s %s %d: gettimeofday() failed: %s\n", __FILE__, __func__, __LINE__, strerror(errno));
-               return NULL;
+     } else {
+          if (retval = *prevlink) {
+               av_freep(&retval->descr);
           }
-          retval->previous = prev;
-          retval->marker_number = n_marker;
-          retval->file = filename;
-          retval->func = func;
-          retval->line = line;
-          retval->label = label;
-          retval->descr = av_vasprintf(fmt,va);
-          //av_log(NULL,AV_LOG_ERROR,"%s %d: Time record %d for %s %s %d added at %p parent = %p  time = %lu\n",
-          //       __func__, __LINE__, n_marker, filename, func, line, retval, prevlink, (unsigned long)retval->tv.tv_usec);
+     }
+     memset(retval,0,sizeof(TimeTrack));
+     retval->previous = prev;
+     retval->marker_number = n_marker;
+     retval->file  = filename;
+     retval->func  = func;
+     retval->line  = line;
+     retval->label = label;
+     retval->descr = av_vasprintf(fmt,va);
+     timersub(&now, &dcx->tvs[0], &retval->tv);    // Calculate elaped time and store in marker.
+     if (!OPTMASK_G(dcx->optmask,OPT_USE_TIME_TRACK_LINKED_LIST)) {
+          dump_time_marker(retval);  // Linked list not enabled; dump now.
      }
      return(retval);
 }
 
-void dump_time_marker(const TimeTrack *marker, const struct timeval *tv)
+void dump_time_marker(const TimeTrack *marker)
 {
-     struct timeval ltv = {0,0}, dtv;
-
-     if (tv) {
-          ltv = *tv;
-     }
-     timersub(&marker->tv, &ltv, &dtv);
      if (marker) {
           av_log(NULL,AV_LOG_INFO,"Time marker %6d  %30s:  time = %8ld   file: %s function: %s  line: %4d    %s",
-                 marker->marker_number, (marker->label? marker->label : ""), dtv.tv_sec * 1000000 + dtv.tv_usec, marker->file, marker->func, marker->line, marker->descr);
+                 marker->marker_number, (marker->label? marker->label : ""), marker->tv.tv_sec * 1000000 + marker->tv.tv_usec, marker->file, marker->func, marker->line, marker->descr);
      }
 }
 
 void dump_time_track(const TimeTrack *tt)
 {
      const TimeTrack *tti = (tt == NULL)? timetrack_root : tt;
-     struct timeval start_tv = { 0, 0 };
-
      if (tti) {
-          start_tv = tti->tv;
           av_log(NULL,AV_LOG_INFO,"%s %d: Dumping time track:\n", __func__,__LINE__);
           for (  ; tti ; tti = tti->next) {
-               dump_time_marker(tti, &start_tv);
+               dump_time_marker(tti);
           }
      }
 }
@@ -303,14 +326,11 @@ void delete_time_track(void)
 static int delete_time_track_r(TimeTrack *root, int n)
 {
      int rn = -1;
-     if (root != NULL)
+     if (root)
      {
           rn = delete_time_track_r(root->next, n+1);
-          if (root->descr)
-               av_free(root->descr);
-          av_free(root);
+          CLEAR_MARKER(root);
      }
-
      return rn;
 }
 

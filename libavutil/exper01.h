@@ -65,7 +65,7 @@ enum opt_select { OPT_NULL_TRANSFORM,
                   OPT_LOG_POST_FIND_MOTION_02,
                   OPT_LOG_POST_FIND_MOTION_03,
                   OPT_LOG_POST_FIND_MOTION_04,
-                  OPT_USE_TIME_TRACK,
+                  OPT_USE_TIME_TRACK_LINKED_LIST,
                   OPT_DUMP_TIME_TRACK,
                   OPT_GLOBAL_01,
                   OPT_GLOBAL_02,
@@ -87,17 +87,16 @@ enum opt_select { OPT_NULL_TRANSFORM,
  */
 typedef struct
 {
-     /** bit mask; individual bits control various options. */
-     u_int64_t  mask;
-     /** short description */
-     const char *shortdescr;
-     /** full description */
-     const char *descr;
+     u_int64_t  mask;          /** bit mask; individual bits control various options. */
+     const char *shortdescr;   /** short description */
+     const char *descr;        /** full description */
 }OptmaskSelection;
 
 extern OptmaskSelection optmask_selections[];
 
-#define OPTMASK(select) ((deshake->extra.optmask & optmask_selections[select].mask) != 0)
+#define OPTMASK_VAL(select) (optmask_selections[select].mask)
+#define OPTMASK_G(maskval,select)  ((maskval & OPTMASK_VAL(select)) == OPTMASK_VAL(select))
+#define OPTMASK(select) OPTMASK_G(deshake->extra.optmask,select)
 #define OPTMASK_DESCR(select) (optmask_selections[select].descr)
 
 extern int global_option_01;
@@ -127,6 +126,7 @@ typedef struct {
      IntMotionVector imvs[10];             /** motion vector data from scans to use for final vectors     */
      int n_valid_imvs;                     /** Number of valid motion vectors in invs                     */
      int winning_count;                    /** The count found in find_motion that is chosen for the gmv  */
+     struct timeval tvs[16];               /** Timevals for general use; first is reserved for the time track functions. */
      float  alpha;                         /** User-specified alpha for exponential average, if any; overrides default. */
 } DeshakeContextExtra;
 
@@ -182,35 +182,43 @@ typedef struct s_timetrack {
 
 extern int use_time_track;
 
-/** Add a time marker to the linked list.
+/** Add a time marker, optionally to the linked list.
  *
- * Adds a record of the time and optional text
+ * If the mask option OPT_USE_TIME_TRACK_LINKED_LIST is true,
+ * adds a TimeTrack record to the end of the linked list for later
+ * display; otherwise, the value of the marker is optionally displayed immediately (see below).
+ * @param dcx          Pointer to deshake context extras, where the time of first marker is stored
  * @param filename     Name of source file
  * @param func         Name of function
  * @param line         Line number
  * @param label        An identifying label
  * @param fmt          printf-style format string
  * @param ...          Variadic args
- * @return             Pointer to the object
+ * @return             If an object was created, a pointer to the object is returned, otherwise a pointer
+ * to an ephemeral object is returned.  If OPT_DUMP_TIME_TRACK is true, the value of the marker
+ * is logged.
  */
-TimeTrack *add_time_marker(const char *filename, const char* func, int line, const char* label, const char* fmt, ...);
+const TimeTrack *add_time_marker(DeshakeContextExtra *dcx, const char *filename, const char* func, int line, const char* label, const char* fmt, ...);
 /** Add a time marker to the linked list (va_list version). */
-TimeTrack *vadd_time_marker(const char *filename, const char* func, int line, const char* label, const char* fmt, va_list va);
+const TimeTrack *vadd_time_marker(DeshakeContextExtra *dcx, const char *filename, const char* func, int line, const char* label, const char* fmt, va_list va);
 
 /** Log the contents of a time marker.
  *
+ * Each marker consists of a label, the file, function and line number of its creation,
+ * printf-style text and the time, with microsecond resolution. Times are relative to the time
+ * at which the first marker was created.
  * @param marker  Pointer to the time marker
  */
-void dump_time_marker(const TimeTrack *marker, const struct timeval *tv);
+void dump_time_marker(const TimeTrack *marker);
 
 /** Log the markers in the time track.
  *
- * @param tt  Pointer to the first marker to dump.  If null, dump the entire track.
+ * @param tt  Pointer to the first marker to dump.  If NULL, dump the entire track.
  */
 void dump_time_track(const TimeTrack *tt);
 
 /** Delete the time track and free memory allocated to it. */
 void delete_time_track(void);
 
-#define ADDTIME(label,fmt,...) add_time_marker(__FILE__,__func__,__LINE__,label,fmt, ##__VA_ARGS__)
+#define ADDTIME(label,fmt,...) add_time_marker(&deshake->extra,__FILE__,__func__,__LINE__,label,fmt, ##__VA_ARGS__)
 #endif

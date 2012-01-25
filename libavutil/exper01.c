@@ -12,6 +12,7 @@
   #include "xvmc_internal.h"
   #include "thread.h"
 */
+#include <sys/types.h>
 #include <limits.h>
 
 
@@ -231,54 +232,72 @@ TimeTrack *add_time_marker(const char *filename, const char* func, int line, con
 
 TimeTrack *vadd_time_marker(const char *filename, const char* func, int line, const char* label, const char* fmt, va_list va)
 {
-     TimeTrack *retval = NULL, *troot, *prev, **prevlink;
+     TimeTrack *retval=NULL, *troot, *prev = NULL, **prevlink;
+     int n_marker = 1;
 
      if (use_time_track) {
           prevlink = &timetrack_root;
-          prev = timetrack_root;
           for (troot = timetrack_root ; troot ; troot=troot->next) {
+               n_marker++;
                prev = troot;
                prevlink = &troot->next;
           }
-          retval = *prevlink;
           if ((retval = (TimeTrack*) av_malloc(sizeof(TimeTrack))) == NULL) {
                av_log(NULL,AV_LOG_ERROR,"Memory allocation failure in %s %s %d: %s\n", __FILE__, __func__, __LINE__, strerror(errno));
                return NULL;
           }
+          *prevlink = retval;
           memset(retval,0,sizeof(TimeTrack));
           if (gettimeofday(&retval->tv,NULL) < 0) {
                av_log(NULL,AV_LOG_ERROR,"%s %s %d: gettimeofday() failed: %s\n", __FILE__, __func__, __LINE__, strerror(errno));
                return NULL;
           }
           retval->previous = prev;
+          retval->marker_number = n_marker;
           retval->file = filename;
           retval->func = func;
           retval->line = line;
           retval->label = label;
           retval->descr = av_vasprintf(fmt,va);
+          //av_log(NULL,AV_LOG_ERROR,"%s %d: Time record %d for %s %s %d added at %p parent = %p  time = %lu\n",
+          //       __func__, __LINE__, n_marker, filename, func, line, retval, prevlink, (unsigned long)retval->tv.tv_usec);
      }
      return(retval);
 }
 
-void dump_time_marker(const TimeTrack *marker)
+void dump_time_marker(const TimeTrack *marker, const struct timeval *tv)
 {
-     av_log(NULL,AV_LOG_INFO,"Time marker %s: file: %s function: %s  line: %d  time = %12lu   %s\n", (marker->label? marker->label : ""), marker->file, marker->func, marker->line,
-            (unsigned long)marker->tv.tv_usec, marker->descr);
+     struct timeval ltv = {0,0}, dtv;
+
+     if (tv) {
+          ltv = *tv;
+     }
+     timersub(&marker->tv, &ltv, &dtv);
+     if (marker) {
+          av_log(NULL,AV_LOG_INFO,"Time marker %6d  %30s:  time = %8ld   file: %s function: %s  line: %4d    %s",
+                 marker->marker_number, (marker->label? marker->label : ""), dtv.tv_sec * 1000000 + dtv.tv_usec, marker->file, marker->func, marker->line, marker->descr);
+     }
 }
 
 void dump_time_track(const TimeTrack *tt)
 {
-     const TimeTrack *tti;
-     for (tti = (tt == NULL)? timetrack_root : tt; tt ; tt = tt->next) {
-          dump_time_marker(tti);
+     const TimeTrack *tti = (tt == NULL)? timetrack_root : tt;
+     struct timeval start_tv = { 0, 0 };
+
+     if (tti) {
+          start_tv = tti->tv;
+          av_log(NULL,AV_LOG_INFO,"%s %d: Dumping time track:\n", __func__,__LINE__);
+          for (  ; tti ; tti = tti->next) {
+               dump_time_marker(tti, &start_tv);
+          }
      }
 }
 
 static int delete_time_track_r(TimeTrack *root, int n);
 void delete_time_track(void)
 {
-     int n = delete_time_track_r(timetrack_root, 0);
-     av_log(NULL,AV_LOG_INFO,"Time track cleared; %d items\n", n);
+     delete_time_track_r(timetrack_root, 0);
+     timetrack_root = NULL;
 }
 
 static int delete_time_track_r(TimeTrack *root, int n)
@@ -291,6 +310,7 @@ static int delete_time_track_r(TimeTrack *root, int n)
                av_free(root->descr);
           av_free(root);
      }
+
      return rn;
 }
 

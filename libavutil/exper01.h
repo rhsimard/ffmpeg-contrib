@@ -120,20 +120,14 @@ typedef struct {
 } IntMotionVector;
 
 
-/** Extras tacked onto DeshakeContext for testing
- * @param zoom A user-settable zoom to override the default
- * @param optmask Mask to control individual functions throughout the code
- * @param imvs fribbble
- * @param n_valid_imvs snarfle
- * @param 
- */
+/** Extras tacked onto DeshakeContext for testing */
 typedef struct {
-     int zoom;   // Manually-set test value using integer percentages.
-     u_int64_t  optmask;  // Bit mask for on-off devel/debug options.
-     IntMotionVector imvs[10];             // motion vector data from scans to use for final vectors
-     int n_valid_imvs;                     // Number of valid motion vectors in invs
-     int winning_count;                    // The count found in find_motion that is chosen for the gmv
-     float  alpha;                         // User-specified alpha for exponential average, if any; overrides default.
+     int zoom;                             /** Manually-set test value using integer percentages.         */
+     u_int64_t  optmask;                   /** Bit mask for on-off devel/debug options.                   */
+     IntMotionVector imvs[10];             /** motion vector data from scans to use for final vectors     */
+     int n_valid_imvs;                     /** Number of valid motion vectors in invs                     */
+     int winning_count;                    /** The count found in find_motion that is chosen for the gmv  */
+     float  alpha;                         /** User-specified alpha for exponential average, if any; overrides default. */
 } DeshakeContextExtra;
 
 //extern u_int64_t dummy_optmask;
@@ -182,6 +176,7 @@ typedef struct s_timetrack {
      const  char        *file;                 /** filename                                */
      int                 line;                 /** line number                             */
      const char         *label, *descr;        /** an identifying label, optional descriptive information */
+     int                 marker_number;        /** Number of this marker                   */
      struct s_timetrack *next, *previous;      /** links                                   */
 }TimeTrack;
 
@@ -206,7 +201,7 @@ TimeTrack *vadd_time_marker(const char *filename, const char* func, int line, co
  *
  * @param marker  Pointer to the time marker
  */
-void dump_time_marker(const TimeTrack *marker);
+void dump_time_marker(const TimeTrack *marker, const struct timeval *tv);
 
 /** Log the markers in the time track.
  *

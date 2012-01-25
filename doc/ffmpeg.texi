@@ -1,6 +1,6 @@
 \input texinfo @c -*- texinfo -*-
 
-@settitle ffmpeg Documentation
+@settitle ffmpeg Documentation (exper01)
 @titlepage
 @center @titlefont{ffmpeg Documentation}
 @end titlepage

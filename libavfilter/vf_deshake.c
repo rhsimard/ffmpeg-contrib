@@ -408,7 +408,7 @@ static void find_block_motion(DeshakeContext *deshake, uint8_t *src1,
         mv->y = -1;
     }
     emms_c();
-#ifdef EXPER011
+#ifdef EXPER01
     if (OPTMASK(OPT_LOG_FIND_BLOCK_MOTION_FINAL)) {
     av_log(NULL, AV_LOG_ERROR, "%s %d: Final: smallest =%4d  mv->x =%4d  mv->y =%4d\n", __func__, __LINE__, smallest, mv->x, mv->y);
     }
@@ -778,7 +778,7 @@ static void end_frame(AVFilterLink *link)
 
 /** @name Special development-support functions
  *
- * Not intended for general use
+ * Generally intended for testing and development, but some may also find it useful, or at least entertaining.
  * @{*/
 
 /** Draw (optionally) per-block and final vectors; Part of test/development code.
@@ -933,7 +933,6 @@ static av_cold int init(AVFilterContext *ctx, const char *args, void *opaque)
         }
         global_option_01 = OPTMASK(OPT_GLOBAL_01);
         global_option_02 = OPTMASK(OPT_GLOBAL_02);
-        use_time_track = OPTMASK(OPT_USE_TIME_TRACK);
 #else
         sscanf(args, "%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%255s",
                &deshake->cx, &deshake->cy, &deshake->cw, &deshake->ch,

@@ -25,8 +25,8 @@
  */
 
 #include "libavutil/common.h"
-#include "transform.h"
 #include "libavutil/exper01.h"
+#include "transform.h"
 
 #if 0
 #  define SAFE_SUBSCRIPT(ys,xs,sstride)                                                                                                                    \
@@ -111,105 +111,133 @@ INTERPOLATE_METHOD(interpolate_biquadratic)
     }
 }
 
+/*  I didn't get edjumacated on matrices as a youngster; gotta make up for lost time now.
+
+Shift:                 x'         cos(a)    -sin(a)      x_shift         x
+                       y'         sin(a)     cos(a)      y_shift         y
+                       1          0          0           1               1
+       	*
+Zoom:                  x'         zoom_x     0           0               x
+                       y'         0          zoom_y      0               y
+                       1          0          0           1               1
+                       where zoom_x = zoom_y = zoom
+        =
+
+                       x'         cos(a) * zoom_x  -  sin(a) * 0  +  x_shift * 0      |    cos(a) * 0  -  sin(a)   *  zoom_y    +   x_shift * 0       |   cos(a)  * 0  -  sin(a) * 0   + x_shift   * 1
+                       y'         sin(a) * zoom_x  +  cos(a) * 0  +  x_shift * 0      |    sin(a) * 0  +  cos(a)   *  zoom_y    +   y_shift * 0       |   sin(a)  * 0  +  cos(a) * 0   + y_shift   * 1
+                       1          0      * zoom_x  +  0      * 0  +  1       * 0      |    0      * 0  +  0        *  zoom_y    +   1       * 0       |   0       * 0  +  0      * 0   + 1         * 1
+        =
+                       x'         cos(a) * zoom_x       -sin(a) * zoom_y       x_shift       x
+                       y'         sin(a) * zoom_x        cos(a) * zoom_y       y_shift       y
+                       1          0                      0                     1             1
+Is this right? It doesn't agree with the code.
+                       x'         cos(a) * zoom_x       -sin(a) * zoom_y       x_shift       x
+                       y'         sin(a) * zoom_x        cos(a) * zoom_y       y_shift       y
+                       1          0                      0                     1             1
+
+*/
+
 void avfilter_get_matrix(float x_shift, float y_shift, float angle, float zoom, float *matrix) {
-    matrix[0] = zoom * cos(angle);
-    matrix[1] = -sin(angle);
-    matrix[2] = x_shift;
-    matrix[3] = -matrix[1];
-    matrix[4] = matrix[0];
-    matrix[5] = y_shift;
-    matrix[6] = 0;
-    matrix[7] = 0;
-    matrix[8] = 1;
+     // Can't zoom here if the result of the transform will become the next reference frame!
+     matrix[0] =  cos(angle) /* * zoom */;
+     matrix[1] = -sin(angle);
+     matrix[2] =  x_shift;
+     matrix[3] = -matrix[1];
+     matrix[4] =  matrix[0];
+     matrix[5] =  y_shift;
+     matrix[6] =  0;
+     matrix[7] =  0;
+     matrix[8] =  1;
 }
 
 void avfilter_add_matrix(const float *m1, const float *m2, float *result)
 {
     int i;
-    for (i = 0; i < 9; i++)
+    for (i = 0; i < MATRIX_SIZE; i++)
         result[i] = m1[i] + m2[i];
 }
 
 void avfilter_sub_matrix(const float *m1, const float *m2, float *result)
 {
     int i;
-    for (i = 0; i < 9; i++)
+    for (i = 0; i < MATRIX_SIZE; i++)
         result[i] = m1[i] - m2[i];
 }
 
 void avfilter_mul_matrix(const float *m1, float scalar, float *result)
 {
     int i;
-    for (i = 0; i < 9; i++)
+    for (i = 0; i < MATRIX_SIZE; i++)
         result[i] = m1[i] * scalar;
 }
 
 void avfilter_transform(const uint8_t *src, uint8_t *dst,
                         int src_stride, int dst_stride,
-                        int width, int height, const float *matrix, uint8_t blank_default,
+                        int width, int height, const float *matrix, uint8_t def,
                         enum InterpolateMethod interpolate,
 #ifdef EXPER01
                         enum FillMethod fill, DeshakeContextExtra *deshake_extra)
 #else
-                        enum FillMethod fill)
+     enum FillMethod fill)
 #endif
 {
-    int x, y, subscript;
-    unsigned int size = width * height;
-    float x_s, y_s;
-    uint8_t def = blank_default;
-    uint8_t (*func)(float, float, const uint8_t *, int, int, int, uint8_t) = NULL;
+     int x, y, subscript;
+     unsigned int size = width * height;
+     float x_s, y_s;
+     uint8_t (*func)(float, float, const uint8_t *, int, int, int, uint8_t) = NULL;
 #ifdef EXPER01
-    static int fuss=5;
-    if (fuss) {
-         fuss--;
-//         av_log(NULL,AV_LOG_ERROR,"%s %s %d: (info) src_stride %d  dst_stride %d  width: %d  height: %d  matrix [%f %f %f %f %f %f %f %f %f]  src = %p  dst = %p\n",
-//                __FILE__,__func__,__LINE__,src_stride, dst_stride, width, height, matrix[0], matrix[1], matrix[2], matrix[3], matrix[4], matrix[5], matrix[6], matrix[7], matrix[8],
-//                src, dst);
-    }
+     static int fuss=5, fuss2=5;
+     if (fuss && 0) {
+          fuss--;
+          av_log(NULL,AV_LOG_ERROR,"%s %s %d: (info) def %3d fill %d src_stride %d  dst_stride %d  width: %d  height: %d  matrix [%f %f %f %f %f %f %f %f %f]  src = %p  dst = %p\n",
+                 __FILE__,__func__,__LINE__, def, fill, src_stride, dst_stride, width, height, matrix[0], matrix[1], matrix[2], matrix[3], matrix[4], matrix[5], matrix[6], matrix[7], matrix[8],
+                 src, dst);
+     }
+     if (OPTMASK_G(deshake_extra->optmask,OPT_NULL_TRANSFORM)) {
+          fill = FILL_BLANK;
+     } else
 #endif
-    switch(interpolate) {
-        case INTERPOLATE_NEAREST:
-            func = interpolate_nearest;
-            break;
-        case INTERPOLATE_BILINEAR:
-            func = interpolate_bilinear;
-            break;
-        case INTERPOLATE_BIQUADRATIC:
-            func = interpolate_biquadratic;
-            break;
-    }
+     {
+          switch(interpolate) {
+          case INTERPOLATE_NEAREST:
+               func = interpolate_nearest;
+               break;
+          case INTERPOLATE_BILINEAR:
+               func = interpolate_bilinear;
+               break;
+          case INTERPOLATE_BIQUADRATIC:
+               func = interpolate_biquadratic;
+               break;
+          }
+     }
+     for (y = 0; y < height; y++) {
+          for(x = 0; x < width; x++) {
+               x_s = x * matrix[0] + y * matrix[1] + matrix[2];
+               y_s = x * matrix[3] + y * matrix[4] + matrix[5];
 
-    for (y = 0; y < height; y++) {
-        for(x = 0; x < width; x++) {
-            x_s = x * matrix[0] + y * matrix[1] + matrix[2];
-            y_s = x * matrix[3] + y * matrix[4] + matrix[5];
-
-#if 0
-            av_log(NULL,AV_LOG_ERROR,"x_s %f  y_s %f\n", x_s, y_s);
-#endif
-            switch(fill) {
-                case FILL_ORIGINAL:
+               switch(fill) {
+               case FILL_ORIGINAL:
                     def = src[y * src_stride + x];
                     break;
-                case FILL_CLAMP:
+               case FILL_CLAMP:
                     y_s = av_clipf(y_s, 0, height - 1);
                     x_s = av_clipf(x_s, 0, width - 1);
                     def = src[SAFE_SUBSCRIPT(y_s, x_s, src_stride)];
                     break;
-                case FILL_MIRROR:
+               case FILL_MIRROR:
                     y_s = (y_s < 0) ? -y_s : (y_s >= height) ? (height + height - y_s) : y_s;
                     x_s = (x_s < 0) ? -x_s : (x_s >= width) ? (width + width - x_s) : x_s;
                     def = src[SAFE_SUBSCRIPT(y_s, x_s, src_stride)];
                     break;
-            }
-
-            if (deshake_extra->optmask & 0x1) {
-                 dst[y * dst_stride + x] = src[y * src_stride + x];  // Null transform; just copy.
-            } else {
-                 dst[y * dst_stride + x] = func(x_s, y_s, src, width, height, src_stride, def);
-            }
-        }
-    }
+               }
+#ifdef EXPER01
+               if (OPTMASK_G(deshake_extra->optmask,OPT_NULL_TRANSFORM)) {
+                    dst[y * dst_stride + x] = src[y * src_stride + x];  // Null transform; just copy.
+               } else
+#endif
+               {
+                    dst[y * dst_stride + x] = func(x_s, y_s, src, width, height, src_stride, def);
+               }
+          }
+     }
 }
-

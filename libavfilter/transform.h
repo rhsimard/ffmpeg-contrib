@@ -27,14 +27,28 @@
 /**
  * @file
  * transform input video
- *
- * All matrices are defined as a single 9-item block of contiguous memory. For
+ */
+
+#if defined(EXPER01) && defined(MATRIX_RECTANGULAR)
+#  define MATRIX_ROWS (3)
+#  define MATRIX_COLS (3)
+#else
+#  define MATRIX_SIZE (9)
+#endif
+
+#if defined(EXPER01) && defined (MATRIX_RECTANGULAR)
+// Just for experimentation; the single-dimension array is fine.
+typedef float matrix_t[MATRIX_ROWS][MATRIX_COLS];
+#else
+/** All matrices are defined as a single 9-item block of contiguous memory. For
  * example, the identity matrix would be:
  *
  *     float *matrix = {1, 0, 0,
  *                      0, 1, 0,
  *                      0, 0, 1};
  */
+#endif
+
 
 enum InterpolateMethod {
     INTERPOLATE_NEAREST,        //< Nearest-neighbor (fast)
@@ -111,13 +125,13 @@ void avfilter_mul_matrix(const float *m1, float scalar, float *result);
  * @param width          image width in pixels
  * @param height         image height in pixels
  * @param matrix         9-value affine transformation matrix
- * @param blank_default  value for pixels outside the transformed image when FILL_BLANK chosen
+ * @param def            value for pixels outside the transformed image when FILL_BLANK chosen
  * @param interpolate    pixel interpolation method
  * @param fill           edge fill method
  */
 void avfilter_transform(const uint8_t *src, uint8_t *dst,
                         int src_stride, int dst_stride,
-                        int width, int height, const float *matrix, uint8_t blank_default,
+                        int width, int height, const float *matrix, uint8_t def,
                         enum InterpolateMethod interpolate,
 #ifdef EXPER01
                         enum FillMethod fill, DeshakeContextExtra *deshake_extra);

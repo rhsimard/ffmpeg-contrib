@@ -104,7 +104,11 @@ static unsigned long icount = 0;
 #define ALPHA_MAX          (0.99)
 #define ALPHA_MIN          (.001)
 /** @}*/
-
+/** @name Interpolation methods
+ * @{ */
+#define INTERPOLATE_METHOD_CHROMA_DEFAULT (INTERPOLATE_BILINEAR)
+#define INTERPOLATE_METHOD_LUMA_DEFAULT (INTERPOLATE_BILINEAR)
+/** @} */
 /** @name Macros to obtain the dimensions of the chroma planes
     @{*/
 #define CHROMA_HEIGHT(link) -((-link->h) >> av_pix_fmt_descriptors[link->format].log2_chroma_h)
@@ -198,6 +202,7 @@ typedef struct {
     int cx;
     int cy;
 #ifdef EXPER01
+     enum InterpolateMethod interpolate_method_luma, interpolate_method_chroma;
 /** Extra stuff for development. */
      DeshakeContextExtra  extra;
 #endif
@@ -709,9 +714,9 @@ static void end_frame(AVFilterLink *link)
     // Transform the luma plane
 #ifdef EXPER01
     ADDTIME("before luma transform","\n");
-    avfilter_transform(src2, out->data[0], in->linesize[0], out->linesize[0], link->w, link->h, matrix, 0, INTERPOLATE_BILINEAR, deshake->edge, &deshake->extra);
+    avfilter_transform(src2, out->data[0], in->linesize[0], out->linesize[0], link->w, link->h, matrix, 0, deshake->interpolate_method_luma, deshake->edge, &deshake->extra);
 #else
-    avfilter_transform(src2, out->data[0], in->linesize[0], out->linesize[0], link->w, link->h, matrix, 0, INTERPOLATE_BILINEAR, deshake->edge);
+    avfilter_transform(src2, out->data[0], in->linesize[0], out->linesize[0], link->w, link->h, matrix, 0, deshake->interpolate_method_luma, deshake->edge);
 #endif
     // Generate a chroma transformation matrix
     avfilter_get_matrix(t.vector.x / (link->w / CHROMA_WIDTH(link)), t.vector.y / (link->h / CHROMA_HEIGHT(link)), t.angle, 1.0 + t.zoom / 100.0, matrix);
@@ -719,12 +724,12 @@ static void end_frame(AVFilterLink *link)
     // Transform the chroma planes
 #ifdef EXPER01
     ADDTIME("before chroma transform","1");
-    avfilter_transform(in->data[1], out->data[1], in->linesize[1], out->linesize[1], CHROMA_WIDTH(link), CHROMA_HEIGHT(link), matrix, 127, INTERPOLATE_BILINEAR, deshake->edge, &deshake->extra);
+    avfilter_transform(in->data[1], out->data[1], in->linesize[1], out->linesize[1], CHROMA_WIDTH(link), CHROMA_HEIGHT(link), matrix, 127, deshake->interpolate_method_chroma, deshake->edge, &deshake->extra);
     ADDTIME("before chroma transform","2");
-    avfilter_transform(in->data[2], out->data[2], in->linesize[2], out->linesize[2], CHROMA_WIDTH(link), CHROMA_HEIGHT(link), matrix, 127, INTERPOLATE_BILINEAR, deshake->edge, &deshake->extra);
+    avfilter_transform(in->data[2], out->data[2], in->linesize[2], out->linesize[2], CHROMA_WIDTH(link), CHROMA_HEIGHT(link), matrix, 127, deshake->interpolate_method_chroma, deshake->edge, &deshake->extra);
 #else
-    avfilter_transform(in->data[1], out->data[1], in->linesize[1], out->linesize[1], CHROMA_WIDTH(link), CHROMA_HEIGHT(link), matrix, 127, INTERPOLATE_BILINEAR, deshake->edge);
-    avfilter_transform(in->data[2], out->data[2], in->linesize[2], out->linesize[2], CHROMA_WIDTH(link), CHROMA_HEIGHT(link), matrix, 127, INTERPOLATE_BILINEAR, deshake->edge);
+    avfilter_transform(in->data[1], out->data[1], in->linesize[1], out->linesize[1], CHROMA_WIDTH(link), CHROMA_HEIGHT(link), matrix, 127, deshake->interpolate_method_chroma, deshake->edge);
+    avfilter_transform(in->data[2], out->data[2], in->linesize[2], out->linesize[2], CHROMA_WIDTH(link), CHROMA_HEIGHT(link), matrix, 127, deshake->interpolate_method_chroma, deshake->edge);
 #endif
 
 #ifdef EXPER01
@@ -910,6 +915,8 @@ static av_cold int init(AVFilterContext *ctx, const char *args, void *opaque)
     deshake->blocksize = BLOCKSIZE_DEFAULT;
     deshake->contrast = CONTRAST_DEFAULT;
     deshake->search = SEARCH_DEFAULT;
+    deshake->interpolate_method_luma = INTERPOLATE_METHOD_LUMA_DEFAULT
+    deshake->interpolate_method_chroma = INTERPOLATE_METHOD_CHROMA_DEFAULT
     deshake->reference_frames = 20;
 
     deshake->cw = -1;
@@ -924,6 +931,13 @@ static av_cold int init(AVFilterContext *ctx, const char *args, void *opaque)
 
     if (args) {
 #ifdef EXPER01
+/*
+static const AVOption drawtext_options[]= {
+{"search-area" , "restricted search area"   ,  OFFSET(search_area),           AV_OPT_TYPE_STRING, {.str=NULL},  CHAR_MIN, CHAR_MAX },
+{"blocksize"   , "block size"               ,  OFFSET(blocksize),             AV_OPT_TYPE_INT,    {.dbl=8   },  8, 128             },
+{NULL}
+};
+ */
         sscanf(args, "%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%Li:%f:%255s",
                &deshake->cx, &deshake->cy, &deshake->cw, &deshake->ch,
                &deshake->rx, &deshake->ry, (int *)&deshake->edge,

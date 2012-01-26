@@ -124,7 +124,7 @@ static unsigned long icount = 0;
  * Maximum diff from SAD before a seach is considered failed
  * @{ */
 #define DIFF_LIMIT_DEFAULT     (512)
-#define DIFF_LIMIT_MIN         (0)
+#define DIFF_LIMIT_MIN         (INT_MIN)
 #define DIFF_LIMIT_MAX         (INT_MAX)
 /** @} */
 /** @name reference frames
@@ -331,6 +331,7 @@ static double clean_mean(double *values, int count)
  * @param blocksize Size of the block
  * @param deshake Description of this instance of the filter
  * @return Calculated contrast value
+ * @todo Check on the possibility that MMX could help here.
  */
 #ifdef EXPER01
 static int block_contrast(uint8_t *src, int x, int y, int stride, int blocksize, DeshakeContext *deshake)
@@ -342,15 +343,16 @@ static int block_contrast(uint8_t *src, int x, int y, int stride, int blocksize)
     int lowest = 0;
     int i, j, pos;
 
-// Could this be sped up substantially with MMX?
     for (i = 0; i <= blocksize * 2; i++) {
         // We use a width of 16 here to match the libavcodec sad functions
         for (j = 0; i <= 15; i++) {
             pos = (y - i) * stride + (x - j);
-            if (src[pos] < lowest)
-                lowest = src[pos];
-            else if (src[pos] > highest) {
-                highest = src[pos];
+            if (pos >= 0) {
+                if (src[pos] < lowest)
+                    lowest = src[pos];
+                else if (src[pos] > highest) {
+                    highest = src[pos];
+                }
             }
         }
     }

@@ -24,7 +24,7 @@ OptmaskSelection optmask_selections[] =
 {
     { 0x0000000000000001, "null transform"                   , "null transform"                                                                 },
     { 0x0000000000000002, "blank frame"                      , "blank frame"                                                                    },
-    { 0x0000000000000004, "block vectors"                    , "draw block vectors"                                                             },
+    { 0x0000000000000004, "block vectors"                    , "draw block vectors at block centers = mv.x,mv.y"                                },
     { 0x0000000000000008, "block vector normalize"           , "normalize block vectors"                                                        },
     { 0x0000000000000010, "final vector orig to final"       , "draw final vector from orig.vector to t.vector"                                 },
     { 0x0000000000000020, "final vector avg to final"        , "draw final vector from avg.vector to t.vector"                                  },
@@ -157,7 +157,7 @@ void exper01_draw_arrow(AVFilterBufferRef *avbuf, int sx, int sy, int ex,
 {
     int dx,dy;
 
-#define ARROWHEAD_SIZE (5)
+#define ARROWHEAD_SIZE (3)
 
     int sxm = sx-1, sym = sy+1, exm=ex-1, eym=ey+1, rx, ry, length=0;
 

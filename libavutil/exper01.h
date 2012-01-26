@@ -9,6 +9,7 @@
 
 
 #define EXPER01
+#define USE_AVOPTION
 #include <stdint.h>
 #include <sys/types.h>
 #include <time.h>
@@ -121,13 +122,20 @@ typedef struct {
 
 /** Extras tacked onto DeshakeContext for testing */
 typedef struct {
-    int zoom;                             /** Manually-set test value using integer percentages.         */
-    u_int64_t  optmask;                   /** Bit mask for on-off devel/debug options.                   */
-    IntMotionVector imvs[10];             /** motion vector data from scans to use for final vectors     */
-    int n_valid_imvs;                     /** Number of valid motion vectors in invs                     */
-    int winning_count;                    /** The count found in find_motion that is chosen for the gmv  */
-    struct timeval tvs[16];               /** Timevals for general use; first is reserved for the time track functions. */
-    float  alpha;                         /** User-specified alpha for exponential average, if any; overrides default. */
+    u_int64_t           optmask;          /** Bit mask for on-off devel/debug options.                   */
+    char               *s_optmask;        /** String returned by option code                             */
+    char               *search_area;      /** Search area string from options code                       */
+    IntMotionVector     imvs[10];         /** motion vector data from scans to use for final vectors     */
+    int                 n_valid_imvs;     /** Number of valid motion vectors in invs                     */
+    int                 winning_count;    /** The count found in find_motion that is chosen for the gmv  */
+    struct timeval      tvs[16];          /** Timevals for general use; first is reserved for the time track functions. */
+    float               alpha;            /** User-specified alpha for exponential average, if any; overrides default. */
+    float               zoom;             /** substitute zoom for test                                   */
+    int                 diff_limit;       /** Maximum diff from SAD that can still be accepted           */
+    char               *logfile;          /** Optional log file                                          */
+    int                 reference_frames; /** Number of reference frames (defines averaging window)      */
+    char               *oldopts;          /** Option string when user chooses old style                  */
+    int                 interpolate_luma, interpolate_chroma; /** Interpolation methods */
 } DeshakeContextExtra;
 
 //extern u_int64_t dummy_optmask;

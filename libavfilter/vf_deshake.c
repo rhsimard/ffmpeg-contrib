@@ -57,6 +57,7 @@
 #include "libavutil/pixdesc.h"
 #include "libavcodec/dsputil.h"
 #include "libavutil/colorspace.h"
+#include "libavutil/opt.h"
 
 #include "transform.h"
 #include "libavutil/exper01.h"     // EXPER01
@@ -67,6 +68,11 @@ static unsigned long fcount = 0;
 static unsigned long icount = 0;
 #endif
 
+/** name search area limits
+ * Limits and default of user option for the search area
+ * @{ */
+#define SEARCH_AREA_DEFAULT  "-1:-1:-1:-1"
+/** @} */
 /** @name rxry
  *  Limits and default of user option for the maximum extent of movement in x and y directions
  *  @{*/
@@ -96,7 +102,7 @@ static unsigned long icount = 0;
 /** @}*/
 /** Default search type; see man page for details. */
 #define SEARCH_DEFAULT     (EXHAUSTIVE)
-/** @name alpha
+/** @name alpha.
  *  Limits and default of user option for alpha value for exponential average.
  *  A negative value leaves existing default based on the number of reference frames. (New, for test, may not stay.)
  *  @{*/
@@ -104,11 +110,22 @@ static unsigned long icount = 0;
 #define ALPHA_MAX          (0.99)
 #define ALPHA_MIN          (.001)
 /** @}*/
-/** @name Interpolation methods
+/** @name Interpolation methods.
  * @{ */
-#define INTERPOLATE_METHOD_CHROMA_DEFAULT (INTERPOLATE_BILINEAR)
-#define INTERPOLATE_METHOD_LUMA_DEFAULT (INTERPOLATE_BILINEAR)
+#define INTERPOLATE_METHOD_LUMA           (deshake->extra.interpolate_luma)
+#define INTERPOLATE_METHOD_CHROMA         (deshake->extra.interpolate_chroma)
+#define INTERP_LUMA_DEFAULT               (INTERPOLATE_DEFAULT)
+#define INTERP_CHROMA_DEFAULT             (INTERPOLATE_DEFAULT)
 /** @} */
+/** @name diff limit.
+ * Maximum diff from SAD before a seach is considered failed
+ * @{ */
+#define DIFF_LIMIT_DEFAULT     (512)
+#define DIFF_LIMIT_MIN         (0)
+#define DIFF_LIMIT_MAX         (INT_MAX)
+/** @} */
+
+
 /** @name Macros to obtain the dimensions of the chroma planes
     @{*/
 #define CHROMA_HEIGHT(link) -((-link->h) >> av_pix_fmt_descriptors[link->format].log2_chroma_h)
@@ -190,23 +207,51 @@ typedef struct {
     int blocksize;             ///< Size of blocks to compare
     int contrast;              ///< Contrast threshold
     enum SearchMethod search;  ///< Motion search method
-/** Holds transforms for the exponential average and the last ...*/
     Transform avg, last;       ///< Transforms: running average and last frame
-/** Number of reference frames used for the exponential average */
-    int reference_frames;              ///< Number of reference frames (defines averaging window)
-/** FILE pointer; non-null if user has requested the file in the options. */
-    FILE *fp;
-/** User-settable oundaries of frame area within which to search for motion. */
+    FILE *fp;                  ///< FILE pointer; non-null if user has requested the file in the options.
     int cw;                    ///< Crop motion search to this box
     int ch;
     int cx;
     int cy;
 #ifdef EXPER01
-    enum InterpolateMethod interpolate_method_luma, interpolate_method_chroma;
-/** Extra stuff for development. */
-    DeshakeContextExtra  extra;
+    DeshakeContextExtra  extra;  ///< Extra stuff for development.
 #endif
 }DeshakeContext;
+
+#if defined(EXPER01) && defined(USE_AVOPTION)
+#define OFFSET(x) offsetof(DeshakeContext, x)
+  static const AVOption deshake_options[]= {
+      {"opts"                     , "old-style option string"                           ,  OFFSET(extra.oldopts)            , AV_OPT_TYPE_STRING, {.str=NULL                       },  CHAR_MIN, CHAR_MAX             },
+      {"search-limits"            , "restrictions on search area"                       ,  OFFSET(extra.search_area)        , AV_OPT_TYPE_STRING, {.str=SEARCH_AREA_DEFAULT        },  CHAR_MIN, CHAR_MAX             },
+      {"search-extent-x"          , "extent of search on x axis"                        ,  OFFSET(rx)                       , AV_OPT_TYPE_INT,    {.dbl=RX_DEFAULT                 },  RX_MIN, RX_MAX                 },
+      {"search-extent-y"          , "extent of search on y axis"                        ,  OFFSET(ry)                       , AV_OPT_TYPE_INT,    {.dbl=RY_DEFAULT                 },  RY_MIN, RY_MAX                 },
+      {"blocksize"                , "block size"                                        ,  OFFSET(blocksize)                , AV_OPT_TYPE_INT,    {.dbl=BLOCKSIZE_DEFAULT          },  BLOCKSIZE_MIN, BLOCKSIZE_MAX   },
+      {"edge"                     , "edge style"                                        ,  OFFSET(edge)                     , AV_OPT_TYPE_INT,    {.dbl=FILL_DEFAULT               },  0, FILL_COUNT-1                },
+      {"contrast"                 , "minimum contrast"                                  ,  OFFSET(contrast)                 , AV_OPT_TYPE_INT,    {.dbl=CONTRAST_DEFAULT           },  CONTRAST_MIN, CONTRAST_MAX     },
+      {"search-type"              , "search type"                                       ,  OFFSET(search)                   , AV_OPT_TYPE_INT,    {.dbl=SEARCH_DEFAULT             },  EXHAUSTIVE, SEARCH_COUNT-1     },
+      {"filename"                 , "optional log file"                                 ,  OFFSET(extra.logfile)            , AV_OPT_TYPE_STRING, {.str=NULL                       },  CHAR_MIN, CHAR_MAX             },
+      {"test: zoom"               , "option bitmask"                                    ,  OFFSET(extra.s_optmask)          , AV_OPT_TYPE_FLOAT,  {.dbl=1.0                        },  0.0, 1000000.0                 },
+      {"test: alpha"              , "substitute alpha for exponential average"          ,  OFFSET(extra.alpha)              , AV_OPT_TYPE_FLOAT,  {.dbl=ALPHA_DEFAULT              },  ALPHA_MIN, ALPHA_MAX           },
+      {"test: diff limit"         , "largest SAD diff to be considered valid"           ,  OFFSET(extra.diff_limit)         , AV_OPT_TYPE_INT,    {.dbl=DIFF_LIMIT_DEFAULT         },  DIFF_LIMIT_MIN, DIFF_LIMIT_MAX },
+      {"test: interpolate-luma"   , "interpolation method to use for luma plane"        ,  OFFSET(extra.interpolate_luma)   , AV_OPT_TYPE_INT,    {.dbl=INTERP_LUMA_DEFAULT        },  0, INTERPOLATE_COUNT -1        },
+      {"test: interpolate-chroma" , "interpolation method to use for chroma planes"     ,  OFFSET(extra.interpolate_chroma) , AV_OPT_TYPE_INT,    {.dbl=INTERP_CHROMA_DEFAULT      },  0, INTERPOLATE_COUNT -1        },
+      {NULL}
+  };
+#endif
+
+static const char *get_deshake_name(void *ctx)
+{
+    return "deshake";
+}
+
+/** Class description */
+static const AVClass deshake_class = {
+    .class_name  = "DeshakeContext",
+    .item_name   = get_deshake_name,
+#if defined(EXPER01) && defined(USE_AVOPTION)
+    .option      = deshake_options,
+#endif
+};
 
 static double block_angle(int x, int y, int cx, int cy, IntMotionVector *shift);
 static double clean_mean(double *values, int count);
@@ -251,7 +296,6 @@ static double clean_mean(double *values, int count)
     for (x = cut; x < count - cut; x++) {
         mean += values[x];
     }
-
     return mean / (count - cut * 2);
 }
 
@@ -261,7 +305,7 @@ static double clean_mean(double *values, int count)
  * When searching for global motion we
  * really only care about the high contrast blocks, so using this method we
  * can actually skip blocks we don't care much about.
- * @param src Video data to process (luma)
+ * @param src Video luma data to process
  * @param x, y Location of the block
  * @param stride Distance within the data from one line to the next]
  * @param blocksize Size of the block
@@ -271,13 +315,14 @@ static double clean_mean(double *values, int count)
 #ifdef EXPER01
 static int block_contrast(uint8_t *src, int x, int y, int stride, int blocksize, DeshakeContext *deshake)
 #else
-    static int block_contrast(uint8_t *src, int x, int y, int stride, int blocksize, DeshakeContext)
+static int block_contrast(uint8_t *src, int x, int y, int stride, int blocksize, DeshakeContext)
 #endif
 {
     int highest = 0;
     int lowest = 0;
     int i, j, pos;
 
+// Could this be sped up substantially with MMX?
     for (i = 0; i <= blocksize * 2; i++) {
         // We use a width of 16 here to match the libavcodec sad functions
         for (j = 0; i <= 15; i++) {
@@ -295,7 +340,10 @@ static int block_contrast(uint8_t *src, int x, int y, int stride, int blocksize,
 
 /**
  * Find the rotation for a given block.
- * <<<<<<<< DO THIS
+ * @param x, y Location of block
+ * @param cx, cy (unused)
+ * @param shift x and y displacements
+ * @return rotation in radians
  */
 static double block_angle(int x, int y, int cx, int cy, IntMotionVector *shift)
 {
@@ -424,9 +472,8 @@ static void find_block_motion(DeshakeContext *deshake, uint8_t *src1,
 /**
  * Find estimated global motion for a scene.
  *
- * Find the estimated global motion given the most likely shift
- * for each block in the frame. The global motion is estimated to be the
- * same as the motion from most blocks in the frame, so if most blocks
+ * The global motion is estimated to be the
+ * same as the motion of most blocks in the frame, so if most blocks
  * move one pixel to the right and two pixels down, this would yield a
  * motion vector (1, -2).
  * @param deshake Description of this instance
@@ -500,46 +547,49 @@ static void find_motion(DeshakeContext *deshake, uint8_t *src1, uint8_t *src2,
                     center_x += mv.x;
                     center_y += mv.y;
 #ifdef EXPER01
+#define VECTOR_MIN (3)
                     if (OPTMASK(OPT_BLOCK_VECTORS)) {
                         static int fuss=10;
-                        if ((arrow = av_malloc(sizeof(ArrowAnnotation)))) {
-                            float fx = 1.0, fy = 1.0;
-                            arrow->startx = x;
-                            arrow->starty = y;
-                            if (OPTMASK(OPT_BLOCK_VECTORS_NORMALIZE)) {
-                                arrow->endx = x + (int)((float)mv.x * 8.0/deshake->rx); //+ deshake->rx; // Normalize for better visiblity.
-                                arrow->endy = y + (int)((float)mv.y * 8.0/deshake->ry);
-                                fx = (float)arrow->endx/(x + (float)mv.x + deshake->rx);
-                                fy = (float)arrow->endy/(y + (float)mv.y + deshake->ry);
-                            } else {
-                                arrow->endx = x + mv.x;
-                                arrow->endy = y + mv.y;
-                            }
-                            if (fuss && (mv.x || mv.y)) {
+                        if (mv.x >= VECTOR_MIN || mv.y >= VECTOR_MIN){
+                            if ((arrow = av_malloc(sizeof(ArrowAnnotation)))) {
+                                float fx = 1.0, fy = 1.0;
+                                arrow->startx = x + deshake->blocksize/2;
+                                arrow->starty = y + deshake->blocksize/2;
+                                if (OPTMASK(OPT_BLOCK_VECTORS_NORMALIZE)) {
+                                    arrow->endx = arrow->startx + (int)((float)mv.x * 8.0/deshake->rx); //+ deshake->rx; // Normalize for better visiblity.
+                                    arrow->endy = arrow->starty + (int)((float)mv.y * 8.0/deshake->ry);
+                                    fx = (float)arrow->endx/(x + (float)mv.x + deshake->rx);
+                                    fy = (float)arrow->endy/(y + (float)mv.y + deshake->ry);
+                                } else {
+                                    arrow->endx = arrow->startx + mv.x;
+                                    arrow->endy = arrow->starty + mv.y;
+                                }
+                                if (fuss && (mv.x || mv.y)) {
 //                                   av_log(deshake,AV_LOG_ERROR,"%s %d: fx=%f, fy=%f, x=%d, mv.x=%d, deshake->rx=%d, startx=%d,  endx=%d, y=%d, mv.y=%d, deshake->ry=%d, starty=%d, endy=%d\n",
 //                                          __func__,__LINE__, fx, fy, x, mv.x, deshake->rx, arrow->startx, arrow->endx, y, mv.y, deshake->ry, arrow->starty, arrow->endy);
-                                fuss--;
-                            }
-                            arrow->count = counts[mv.x + deshake->rx][mv.y + deshake->ry];
-                            arrow->highlight = 0;
-                            arrow->next = NULL;
-                            arrow->annotation = av_asprintf("%d %d %d %d counts=%d", x, y, mv.x, mv.y, counts[mv.x + deshake->rx][mv.y + deshake->ry]);
-                            arrow_index=0;
-                            for (a2 = &arrow_root ; *a2  ; a2 = &(*a2)->next, arrow_index++) {
-                                if (OPTMASK(OPT_LOG_BLOCK_VECTORS_INNER_LOOP)) {
-//                                        av_log(deshake,AV_LOG_ERROR,"%s %d: index=%d a2 = %p  *a2 = %p  (*a2)->next = %p  arrow_root is at %p  arrow_root = %p  x = %4d  y = %4d  mv.x = %4d  mv.y = %4d  ...rx = %4d  ...ry = %4d\n",
-                                    av_log(deshake,AV_LOG_ERROR,"%s %d: index=%2d  x=%3d  y=%3d  mv.x=%2d  mv.y=%2d  rx=%3d  ry=%3d\n",
-                                           __func__, __LINE__, ((*a2)? (*a2)->index : -1), /* a2, *a2, ((*a2)? (*a2)->next : NULL),  &arrow_root, arrow_root, */ x, y, mv.x, mv.y, deshake->rx, deshake->ry);
+                                    fuss--;
                                 }
+                                arrow->count = counts[mv.x + deshake->rx][mv.y + deshake->ry];
+                                arrow->highlight = 0;
+                                arrow->next = NULL;
+                                arrow->annotation = av_asprintf("%d %d %d %d counts=%d", x, y, mv.x, mv.y, counts[mv.x + deshake->rx][mv.y + deshake->ry]);
+                                arrow_index=0;
+                                for (a2 = &arrow_root ; *a2  ; a2 = &(*a2)->next, arrow_index++) {
+                                    if (OPTMASK(OPT_LOG_BLOCK_VECTORS_INNER_LOOP)) {
+//                                        av_log(deshake,AV_LOG_ERROR,"%s %d: index=%d a2 = %p  *a2 = %p  (*a2)->next = %p  arrow_root is at %p  arrow_root = %p  x = %4d  y = %4d  mv.x = %4d  mv.y = %4d  ...rx = %4d  ...ry = %4d\n",
+                                        av_log(deshake,AV_LOG_ERROR,"%s %d: index=%2d  x=%3d  y=%3d  mv.x=%2d  mv.y=%2d  rx=%3d  ry=%3d\n",
+                                               __func__, __LINE__, ((*a2)? (*a2)->index : -1), /* a2, *a2, ((*a2)? (*a2)->next : NULL),  &arrow_root, arrow_root, */ x, y, mv.x, mv.y, deshake->rx, deshake->ry);
+                                    }
+                                }
+                                if (OPTMASK(OPT_LOG_BLOCK_VECTORS_LOOP_FINAL)) {
+                                    av_log(deshake,AV_LOG_ERROR,"%s %d: arw.index=%2d start=%3d,%3d end=%3d,%3d count=%3d x=%3d y=%3d mv.x=%3d mv.y=%3d rx=%3d ry=%3d) annotation=\"%s\"\n",
+                                           __func__,__LINE__,arrow_index, arrow->startx, arrow->starty, arrow->endx, arrow->endy, arrow->count, x, y, mv.x, mv.y, deshake->rx, deshake->ry,  arrow->annotation);
+                                }
+                                arrow->index = arrow_index;
+                                (*a2) = arrow;
+                            } else {
+                                av_log(deshake,AV_LOG_ERROR,"%s %d: arrow annotation alloc failure.\n", __func__, __LINE__);
                             }
-                            if (OPTMASK(OPT_LOG_BLOCK_VECTORS_LOOP_FINAL)) {
-                                av_log(deshake,AV_LOG_ERROR,"%s %d: arw.index=%2d start=%3d,%3d end=%3d,%3d count=%3d x=%3d y=%3d mv.x=%3d mv.y=%3d rx=%3d ry=%3d) annotation=\"%s\"\n",
-                                       __func__,__LINE__,arrow_index, arrow->startx, arrow->starty, arrow->endx, arrow->endy, arrow->count, x, y, mv.x, mv.y, deshake->rx, deshake->ry,  arrow->annotation);
-                            }
-                            arrow->index = arrow_index;
-                            (*a2) = arrow;
-                        } else {
-                            av_log(deshake,AV_LOG_ERROR,"%s %d: arrow annotation alloc failure.\n", __func__, __LINE__);
                         }
                     }
 #endif
@@ -633,10 +683,10 @@ static void end_frame(AVFilterLink *link)
     ADDTIME("entry","\n");
     src1  = (deshake->ref == NULL) ? in->data[0] : deshake->ref->data[0];
     src2  = in->data[0];
-    alpha = (DESHAKE_ALPHA > 0)? DESHAKE_ALPHA : (deshake->reference_frames)? 2.0 / deshake->reference_frames : 0.5;
+    alpha = (DESHAKE_ALPHA > 0)? DESHAKE_ALPHA : (deshake->extra.reference_frames)? 2.0 / deshake->extra.reference_frames : 0.5;
 
     if (!fuss) {
-        av_log(deshake,AV_LOG_DEBUG,"%s %d: alpha =%4.2f  reference_frames = %d  deshake->ref =%p\n", __func__,__LINE__,alpha,deshake->reference_frames, deshake->ref);
+        av_log(deshake,AV_LOG_DEBUG,"%s %d: alpha =%4.2f  reference_frames = %d  deshake->ref =%p\n", __func__,__LINE__,alpha,deshake->extra.reference_frames, deshake->ref);
         fuss++;
     }
     if (deshake->cx < 0 || deshake->cy < 0 || deshake->cw < 0 || deshake->ch < 0) {
@@ -714,9 +764,9 @@ static void end_frame(AVFilterLink *link)
     // Transform the luma plane
 #ifdef EXPER01
     ADDTIME("before luma transform","\n");
-    avfilter_transform(src2, out->data[0], in->linesize[0], out->linesize[0], link->w, link->h, matrix, 0, deshake->interpolate_method_luma, deshake->edge, &deshake->extra);
+    avfilter_transform(src2, out->data[0], in->linesize[0], out->linesize[0], link->w, link->h, matrix, 0, INTERPOLATE_METHOD_LUMA, deshake->edge, &deshake->extra);
 #else
-    avfilter_transform(src2, out->data[0], in->linesize[0], out->linesize[0], link->w, link->h, matrix, 0, deshake->interpolate_method_luma, deshake->edge);
+    avfilter_transform(src2, out->data[0], in->linesize[0], out->linesize[0], link->w, link->h, matrix, 0, INTERPOLATE_METHOD_LUMA, deshake->edge);
 #endif
     // Generate a chroma transformation matrix
     avfilter_get_matrix(t.vector.x / (link->w / CHROMA_WIDTH(link)), t.vector.y / (link->h / CHROMA_HEIGHT(link)), t.angle, 1.0 + t.zoom / 100.0, matrix);
@@ -724,12 +774,12 @@ static void end_frame(AVFilterLink *link)
     // Transform the chroma planes
 #ifdef EXPER01
     ADDTIME("before chroma transform","1");
-    avfilter_transform(in->data[1], out->data[1], in->linesize[1], out->linesize[1], CHROMA_WIDTH(link), CHROMA_HEIGHT(link), matrix, 127, deshake->interpolate_method_chroma, deshake->edge, &deshake->extra);
+    avfilter_transform(in->data[1], out->data[1], in->linesize[1], out->linesize[1], CHROMA_WIDTH(link), CHROMA_HEIGHT(link), matrix, 127, INTERPOLATE_METHOD_CHROMA, deshake->edge, &deshake->extra);
     ADDTIME("before chroma transform","2");
-    avfilter_transform(in->data[2], out->data[2], in->linesize[2], out->linesize[2], CHROMA_WIDTH(link), CHROMA_HEIGHT(link), matrix, 127, deshake->interpolate_method_chroma, deshake->edge, &deshake->extra);
+    avfilter_transform(in->data[2], out->data[2], in->linesize[2], out->linesize[2], CHROMA_WIDTH(link), CHROMA_HEIGHT(link), matrix, 127, INTERPOLATE_METHOD_CHROMA, deshake->edge, &deshake->extra);
 #else
-    avfilter_transform(in->data[1], out->data[1], in->linesize[1], out->linesize[1], CHROMA_WIDTH(link), CHROMA_HEIGHT(link), matrix, 127, deshake->interpolate_method_chroma, deshake->edge);
-    avfilter_transform(in->data[2], out->data[2], in->linesize[2], out->linesize[2], CHROMA_WIDTH(link), CHROMA_HEIGHT(link), matrix, 127, deshake->interpolate_method_chroma, deshake->edge);
+    avfilter_transform(in->data[1], out->data[1], in->linesize[1], out->linesize[1], CHROMA_WIDTH(link), CHROMA_HEIGHT(link), matrix, 127, INTERPOLATE_METHOD_CHROMA, deshake->edge);
+    avfilter_transform(in->data[2], out->data[2], in->linesize[2], out->linesize[2], CHROMA_WIDTH(link), CHROMA_HEIGHT(link), matrix, 127, INTERPOLATE_METHOD_CHROMA, deshake->edge);
 #endif
 
 #ifdef EXPER01
@@ -902,27 +952,41 @@ static void draw_vectors_r(DeshakeContext *deshake, const ArrowAnnotation *root,
 static av_cold int init(AVFilterContext *ctx, const char *args, void *opaque)
 {
     DeshakeContext *deshake = ctx->priv;
-    char filename[256] = {0};
     char *statmsg;
+    const char *argstring = args;
 #ifdef EXPER01
     u_int32_t *p_32_01, *p_32_02, *p_32_03;
     int i, nopts = 0;
     OptmaskSelection *osp;
 #endif
+#if defined(EXPER01) && defined(USE_AVOPTION)
+    int err;
+    deshake->av_class = deshake_class;
+    av_opt_set_defaults(deshake);
+
+    if ((err = (av_set_options_string(deshake, args, "=", ":"))) < 0) {
+        av_log(ctx, AV_LOG_ERROR, "Error parsing options string: '%s'\n", args);
+        return err;
+    }
+    argstring = deshake->extra.oldopts;
+#else
+    char filename[256] = {0};
     deshake->rx = RX_DEFAULT;
     deshake->ry = RY_DEFAULT;
     deshake->edge = FILL_DEFAULT;
     deshake->blocksize = BLOCKSIZE_DEFAULT;
     deshake->contrast = CONTRAST_DEFAULT;
     deshake->search = SEARCH_DEFAULT;
-    deshake->interpolate_method_luma = INTERPOLATE_METHOD_LUMA_DEFAULT
-        deshake->interpolate_method_chroma = INTERPOLATE_METHOD_CHROMA_DEFAULT
-        deshake->reference_frames = 20;
+    INTERPOLATE_METHOD_LUMA   = INTERP_LUMA_DEFAULT;
+    INTERPOLATE_METHOD_CHROMA = INTERP_CHROMA_DEFAULT;
+    deshake->extra.reference_frames = 20;
 
     deshake->cw = -1;
     deshake->ch = -1;
     deshake->cx = -1;
     deshake->cy = -1;
+#endif
+
 #ifdef EXPER01
     icount++;
     memset(&deshake->extra,0,sizeof(deshake->extra));
@@ -931,17 +995,10 @@ static av_cold int init(AVFilterContext *ctx, const char *args, void *opaque)
 
     if (args) {
 #ifdef EXPER01
-/*
-  static const AVOption drawtext_options[]= {
-  {"search-area" , "restricted search area"   ,  OFFSET(search_area),           AV_OPT_TYPE_STRING, {.str=NULL},  CHAR_MIN, CHAR_MAX },
-  {"blocksize"   , "block size"               ,  OFFSET(blocksize),             AV_OPT_TYPE_INT,    {.dbl=8   },  8, 128             },
-  {NULL}
-  };
-*/
-        sscanf(args, "%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%Li:%f:%255s",
+        sscanf(args, "%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%f:%Li:%f:%255s",
                &deshake->cx, &deshake->cy, &deshake->cw, &deshake->ch,
                &deshake->rx, &deshake->ry, (int *)&deshake->edge,
-               &deshake->blocksize, &deshake->contrast, (int *)&deshake->search, &DESHAKE_ZOOM, (long long int*)&deshake->extra.optmask, &DESHAKE_ALPHA, filename);
+               &deshake->blocksize, &deshake->contrast, (int *)&deshake->search, &DESHAKE_ZOOM, (long long int*)&deshake->extra.optmask, &DESHAKE_ALPHA, deshake->extra.logfile);
         if (DESHAKE_ALPHA >= 0) {
             DESHAKE_ALPHA = av_clipf(DESHAKE_ALPHA,0.01,0.99);
         }
@@ -951,7 +1008,7 @@ static av_cold int init(AVFilterContext *ctx, const char *args, void *opaque)
         sscanf(args, "%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%255s",
                &deshake->cx, &deshake->cy, &deshake->cw, &deshake->ch,
                &deshake->rx, &deshake->ry, (int *)&deshake->edge,
-               &deshake->blocksize, &deshake->contrast, (int *)&deshake->search, filename);
+               &deshake->blocksize, &deshake->contrast, (int *)&deshake->search, deshake->extra.logfile);
 #endif
 
         deshake->blocksize = av_clip(deshake->blocksize, BLOCKSIZE_MIN, BLOCKSIZE_MAX);
@@ -964,8 +1021,8 @@ static av_cold int init(AVFilterContext *ctx, const char *args, void *opaque)
         T_SET(deshake->avg, =, 0);
 
     }
-    if (*filename) {
-        if ((deshake->fp = fopen(filename, "w")) != NULL) {
+    if (*deshake->extra.logfile) {
+        if ((deshake->fp = fopen(deshake->extra.logfile, "w")) != NULL) {
             statmsg = av_asprintf("          %7s %7s %7s   %7s %7s %7s   %7s %7s %7s   %7s %7s %7s\n\n",
                                   "Or x", "Or y", "Av x", "Av y", "Fin x", "Fin y", "Or ang", "Av ang", "Fin ang", "Or zm", "Av zm", "Fin zm");
             fwrite(statmsg, sizeof(char), strlen(statmsg), deshake->fp);
@@ -974,7 +1031,7 @@ static av_cold int init(AVFilterContext *ctx, const char *args, void *opaque)
 #endif
             av_free(statmsg);
         } else {
-            av_log(deshake,AV_LOG_ERROR,"Failed to open stat file %s: %s\n", filename, strerror(errno));
+            av_log(deshake,AV_LOG_ERROR,"Failed to open stat file %s: %s\n", deshake->extra.logfile, strerror(errno));
         }
     }
 
@@ -987,10 +1044,10 @@ static av_cold int init(AVFilterContext *ctx, const char *args, void *opaque)
 
 #ifdef EXPER01
     p_32_01 = (u_int32_t*)&deshake->extra.optmask;
-    av_log(ctx, AV_LOG_INFO, "cx: %d, cy: %d, cw: %d, ch: %d, rx: %d, ry: %d, edge: %d blocksize: %d contrast: %d search: %d  zoom: %d  option mask: 0x%08lx %08lx  alpha: %f%s%s\n",
+    av_log(ctx, AV_LOG_INFO, "cx: %d, cy: %d, cw: %d, ch: %d, rx: %d, ry: %d, edge: %d blocksize: %d contrast: %d search: %d  zoom: %f  option mask: 0x%08lx %08lx  alpha: %f%s%s\n",
            deshake->cx, deshake->cy, deshake->cw, deshake->ch,
            deshake->rx, deshake->ry, deshake->edge, deshake->blocksize * 2, deshake->contrast, deshake->search, DESHAKE_ZOOM,
-           (unsigned long)p_32_01[1], (unsigned long)p_32_01[0], DESHAKE_ALPHA, (*filename? "  log file: " : " oh "), (*filename? filename : " no "));
+           (unsigned long)p_32_01[1], (unsigned long)p_32_01[0], DESHAKE_ALPHA, (*deshake->extra.logfile? "  log file: " : " oh "), (*deshake->extra.logfile? deshake->extra.logfile : " no "));
     if (deshake->extra.optmask) {
         av_log(ctx,AV_LOG_VERBOSE,"Enabled deshake options: ");
         for (i = 0 ; i < get_n_optmask_selections() ; i++) {
@@ -1005,7 +1062,7 @@ static av_cold int init(AVFilterContext *ctx, const char *args, void *opaque)
 #else
     av_log(ctx, AV_LOG_INFO, "cx: %d, cy: %d, cw: %d, ch: %d, rx: %d, ry: %d, edge: %d blocksize: %d contrast: %d search: %d  %s\n",
            deshake->cx, deshake->cy, deshake->cw, deshake->ch,
-           deshake->rx, deshake->ry, deshake->edge, deshake->blocksize * 2, deshake->contrast, deshake->search, (*filename? filename : ""));
+           deshake->rx, deshake->ry, deshake->edge, deshake->blocksize * 2, deshake->contrast, deshake->search, (*deshake->extra.logfile? deshake->extra.logfile : ""));
 #endif
 
     return 0;
@@ -1062,6 +1119,9 @@ static av_cold void uninit(AVFilterContext *ctx)
     avfilter_unref_buffer(deshake->ref);
     if (deshake->fp)
         fclose(deshake->fp);
+#if defined(EXPER01) && defined(USE_AVOPTION)
+    av_opt_free(deshake);
+#endif
 }
 
 /** Interface to the system */

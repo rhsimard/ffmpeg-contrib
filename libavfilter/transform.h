@@ -136,7 +136,7 @@ void avfilter_transform(const uint8_t *src, uint8_t *dst,
 #ifdef EXPER01
                         enum FillMethod fill, DeshakeContextExtra *deshake_extra);
 #else
-                        enum FillMethod fill);
+enum FillMethod fill);
 #endif
 
 #endif /* AVFILTER_TRANSFORM_H */

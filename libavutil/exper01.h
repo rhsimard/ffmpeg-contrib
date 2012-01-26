@@ -87,9 +87,9 @@ enum opt_select { OPT_NULL_TRANSFORM,
  */
 typedef struct
 {
-     u_int64_t  mask;          /** bit mask; individual bits control various options. */
-     const char *shortdescr;   /** short description */
-     const char *descr;        /** full description */
+    u_int64_t  mask;          /** bit mask; individual bits control various options. */
+    const char *shortdescr;   /** short description */
+    const char *descr;        /** full description */
 }OptmaskSelection;
 
 extern OptmaskSelection optmask_selections[];
@@ -121,13 +121,13 @@ typedef struct {
 
 /** Extras tacked onto DeshakeContext for testing */
 typedef struct {
-     int zoom;                             /** Manually-set test value using integer percentages.         */
-     u_int64_t  optmask;                   /** Bit mask for on-off devel/debug options.                   */
-     IntMotionVector imvs[10];             /** motion vector data from scans to use for final vectors     */
-     int n_valid_imvs;                     /** Number of valid motion vectors in invs                     */
-     int winning_count;                    /** The count found in find_motion that is chosen for the gmv  */
-     struct timeval tvs[16];               /** Timevals for general use; first is reserved for the time track functions. */
-     float  alpha;                         /** User-specified alpha for exponential average, if any; overrides default. */
+    int zoom;                             /** Manually-set test value using integer percentages.         */
+    u_int64_t  optmask;                   /** Bit mask for on-off devel/debug options.                   */
+    IntMotionVector imvs[10];             /** motion vector data from scans to use for final vectors     */
+    int n_valid_imvs;                     /** Number of valid motion vectors in invs                     */
+    int winning_count;                    /** The count found in find_motion that is chosen for the gmv  */
+    struct timeval tvs[16];               /** Timevals for general use; first is reserved for the time track functions. */
+    float  alpha;                         /** User-specified alpha for exponential average, if any; overrides default. */
 } DeshakeContextExtra;
 
 //extern u_int64_t dummy_optmask;
@@ -140,9 +140,9 @@ typedef struct {
  * in a linked list.
  */
 typedef struct s_arrow {
-     int  index, count, startx, starty, endx, endy, highlight;  // Arrow
-     char* annotation;
-     struct s_arrow *next;
+    int  index, count, startx, starty, endx, endy, highlight;  // Arrow
+    char* annotation;
+    struct s_arrow *next;
 }ArrowAnnotation;
 
 extern ArrowAnnotation *arrow_root;
@@ -171,13 +171,13 @@ int get_n_optmask_selections(void);
  * display and analysis.
  */
 typedef struct s_timetrack {
-     struct timeval      tv;                   /** timestamp                               */
-     const  char        *func;                 /** function name                           */
-     const  char        *file;                 /** filename                                */
-     int                 line;                 /** line number                             */
-     const char         *label, *descr;        /** an identifying label, optional descriptive information */
-     int                 marker_number;        /** Number of this marker                   */
-     struct s_timetrack *next, *previous;      /** links                                   */
+    struct timeval      tv;                   /** timestamp                               */
+    const  char        *func;                 /** function name                           */
+    const  char        *file;                 /** filename                                */
+    int                 line;                 /** line number                             */
+    const char         *label, *descr;        /** an identifying label, optional descriptive information */
+    int                 marker_number;        /** Number of this marker                   */
+    struct s_timetrack *next, *previous;      /** links                                   */
 }TimeTrack;
 
 extern int use_time_track;

@@ -159,21 +159,21 @@ typedef struct {
  * @{*/
 /** Operations between two Transform structs */
 #define T_OP(dest,op,src)                       \
-     do {                                       \
-          dest.vector.x op src.vector.x;        \
-          dest.vector.y op src.vector.y;        \
-          dest.angle    op src.angle;           \
-          dest.zoom     op src.zoom;            \
-     } while(0)
+    do {                                        \
+        dest.vector.x op src.vector.x;          \
+        dest.vector.y op src.vector.y;          \
+        dest.angle    op src.angle;             \
+        dest.zoom     op src.zoom;              \
+    } while(0)
 
 /** Scalars */
 #define T_SET(dest,op,val)                      \
-     do {                                       \
-          dest.vector.x op val;                 \
-          dest.vector.y op val;                 \
-          dest.angle    op val;                 \
-          dest.zoom     op val;                 \
-     } while(0)
+    do {                                        \
+        dest.vector.x op val;                   \
+        dest.vector.y op val;                   \
+        dest.angle    op val;                   \
+        dest.zoom     op val;                   \
+    } while(0)
 /** @}*/
 
 /** Description of an instance of the deshake filter.
@@ -202,9 +202,9 @@ typedef struct {
     int cx;
     int cy;
 #ifdef EXPER01
-     enum InterpolateMethod interpolate_method_luma, interpolate_method_chroma;
+    enum InterpolateMethod interpolate_method_luma, interpolate_method_chroma;
 /** Extra stuff for development. */
-     DeshakeContextExtra  extra;
+    DeshakeContextExtra  extra;
 #endif
 }DeshakeContext;
 
@@ -245,7 +245,7 @@ static double clean_mean(double *values, int count)
     int x;
 
     if (count < 2)
-         return(values[0]);
+        return(values[0]);
     qsort(values, count, sizeof(double), (void*)cmp);
 
     for (x = cut; x < count - cut; x++) {
@@ -271,7 +271,7 @@ static double clean_mean(double *values, int count)
 #ifdef EXPER01
 static int block_contrast(uint8_t *src, int x, int y, int stride, int blocksize, DeshakeContext *deshake)
 #else
-static int block_contrast(uint8_t *src, int x, int y, int stride, int blocksize, DeshakeContext)
+    static int block_contrast(uint8_t *src, int x, int y, int stride, int blocksize, DeshakeContext)
 #endif
 {
     int highest = 0;
@@ -307,8 +307,8 @@ static double block_angle(int x, int y, int cx, int cy, IntMotionVector *shift)
     diff = a2 - a1;
 
     return (diff > M_PI)  ? diff - 2 * M_PI :
-           (diff < -M_PI) ? diff + 2 * M_PI :
-           diff;
+        (diff < -M_PI) ? diff + 2 * M_PI :
+        diff;
 }
 
 /**@}*/
@@ -344,9 +344,9 @@ static void find_block_motion(DeshakeContext *deshake, uint8_t *src1,
     int tmp, tmp2;
 
 /** Call the previously-determined SAD routine to look for block displacements. */
-    #define CMP(i, j) deshake->c.sad[0](deshake, src1 + by * stride + bx, \
-                                        src2 + (j) * stride + (i), stride, \
-                                        deshake->blocksize)
+#define CMP(i, j) deshake->c.sad[0](deshake, src1 + by * stride + bx,   \
+                                    src2 + (j) * stride + (i), stride,  \
+                                    deshake->blocksize)
 
     if (deshake->search == EXHAUSTIVE) {
         // Compare every possible position - this is sloooow!
@@ -359,7 +359,7 @@ static void find_block_motion(DeshakeContext *deshake, uint8_t *src1,
                     mv->y = y;
 #ifdef EXPER01
                     if (OPTMASK(OPT_LOG_FIND_BLOCK_MOTION_EXHAUSTIVE_LOOP)) {
-                         av_log(deshake,AV_LOG_ERROR,"%s %d: x=%4d y=%4d diff=%5d smallest=%5d\n", __func__,__LINE__,x, y, diff, smallest);
+                        av_log(deshake,AV_LOG_ERROR,"%s %d: x=%4d y=%4d diff=%5d smallest=%5d\n", __func__,__LINE__,x, y, diff, smallest);
                     }
 #endif
                 }
@@ -376,7 +376,7 @@ static void find_block_motion(DeshakeContext *deshake, uint8_t *src1,
                     mv->y = y;
 #ifdef EXPER01
                     if (OPTMASK(OPT_LOG_FIND_BLOCK_MOTION_SMART_EXHAUSTIVE_LOOP)) {
-                         av_log(deshake,AV_LOG_ERROR,"%s %d: x=%4d y=%4d diff=%5d smallest=%5d\n", __func__,__LINE__,x, y, diff, smallest);
+                        av_log(deshake,AV_LOG_ERROR,"%s %d: x=%4d y=%4d diff=%5d smallest=%5d\n", __func__,__LINE__,x, y, diff, smallest);
                     }
 #endif
                 }
@@ -389,9 +389,9 @@ static void find_block_motion(DeshakeContext *deshake, uint8_t *src1,
 
         for (y = tmp2 - 1; y <= tmp2 + 1; y++) {
             for (x = tmp - 1; x <= tmp + 1; x++) {
-                 if (x == tmp && y == tmp2) {
+                if (x == tmp && y == tmp2) {
                     continue;
-                 }
+                }
 
                 diff = CMP(bx - x, by - y);
                 if (diff < smallest) {
@@ -400,7 +400,7 @@ static void find_block_motion(DeshakeContext *deshake, uint8_t *src1,
                     mv->y = y;
 #ifdef EXPER01
                     if (OPTMASK(OPT_LOG_FIND_BLOCK_MOTION_SMART_EXHAUSTIVE_LOOP)) {
-                         av_log(deshake,AV_LOG_ERROR,"%s %d: x=%d y=%d diff=%d smallest=%d\n", __func__,__LINE__,x, y, diff, smallest);
+                        av_log(deshake,AV_LOG_ERROR,"%s %d: x=%d y=%d diff=%d smallest=%d\n", __func__,__LINE__,x, y, diff, smallest);
                     }
 #endif
                 }
@@ -415,7 +415,7 @@ static void find_block_motion(DeshakeContext *deshake, uint8_t *src1,
     emms_c();
 #ifdef EXPER01
     if (OPTMASK(OPT_LOG_FIND_BLOCK_MOTION_FINAL)) {
-    av_log(NULL, AV_LOG_ERROR, "%s %d: Final: smallest =%4d  mv->x =%4d  mv->y =%4d\n", __func__, __LINE__, smallest, mv->x, mv->y);
+        av_log(NULL, AV_LOG_ERROR, "%s %d: Final: smallest =%4d  mv->x =%4d  mv->y =%4d\n", __func__, __LINE__, smallest, mv->x, mv->y);
     }
     ADDTIME("exit","\n");
 #endif
@@ -439,146 +439,146 @@ static void find_block_motion(DeshakeContext *deshake, uint8_t *src1,
 static void find_motion(DeshakeContext *deshake, uint8_t *src1, uint8_t *src2,
                         int width, int height, int stride, Transform *t)
 {
-     int x, y, n;
-     IntMotionVector mv = {0, 0};
-     int counts[BLOCKSIZE_MAX][BLOCKSIZE_MAX] = {{0}};
-     int count_max_value = 0;
-     int contrast;
+    int x, y, n;
+    IntMotionVector mv = {0, 0};
+    int counts[BLOCKSIZE_MAX][BLOCKSIZE_MAX] = {{0}};
+    int count_max_value = 0;
+    int contrast;
 #ifdef EXPER01
-     int arrow_index;
-     double pre_clip_x, pre_clip_y;
-     ArrowAnnotation *arrow, **a2;
+    int arrow_index;
+    double pre_clip_x, pre_clip_y;
+    ArrowAnnotation *arrow, **a2;
 #endif
 
-     int pos;
-     double *angles = av_malloc(sizeof(*angles) * width * height / (16 * deshake->blocksize));
-     int center_x = 0, center_y = 0;
-     double p_x, p_y;
+    int pos;
+    double *angles = av_malloc(sizeof(*angles) * width * height / (16 * deshake->blocksize));
+    int center_x = 0, center_y = 0;
+    double p_x, p_y;
 
 #ifdef EXPER01
-     ADDTIME("entry","\n");
-     DESHAKE_WINNING_COUNT = -1;
+    ADDTIME("entry","\n");
+    DESHAKE_WINNING_COUNT = -1;
 #endif
 
-     pos = 0;
-     // Find motion for every block and store the motion vector in the counts
-     for (y = deshake->ry; y < height - deshake->ry - (deshake->blocksize * 2); y += deshake->blocksize * 2) {
-          // We use a width of 16 here to match the libavcodec SAD functions
-          for (x = deshake->rx; x < width - deshake->rx - 16; x += 16) {
-               // If the contrast is too low, just skip this block as it probably won't be very useful to us.
+    pos = 0;
+    // Find motion for every block and store the motion vector in the counts
+    for (y = deshake->ry; y < height - deshake->ry - (deshake->blocksize * 2); y += deshake->blocksize * 2) {
+        // We use a width of 16 here to match the libavcodec SAD functions
+        for (x = deshake->rx; x < width - deshake->rx - 16; x += 16) {
+            // If the contrast is too low, just skip this block as it probably won't be very useful to us.
 #ifdef EXPER01
-               contrast = block_contrast(src2, x, y, stride, deshake->blocksize, deshake);
+            contrast = block_contrast(src2, x, y, stride, deshake->blocksize, deshake);
 #else
-               contrast = block_contrast(src2, x, y, stride, deshake->blocksize);
+            contrast = block_contrast(src2, x, y, stride, deshake->blocksize);
 #endif
-               if (contrast > deshake->contrast) {
+            if (contrast > deshake->contrast) {
+#ifdef EXPER01
+                if (OPTMASK(OPT_LOG_CALL_FIND_BLOCK_MOTION)) {
+                    av_log(deshake,AV_LOG_ERROR,"%s %d: (fcount =%3lu) calling find_block_motion:  x=%3d   y=%3d   stride=%3d   (contrast=%3d, src1 = %p, src2 = %p)\n",
+                           __func__,__LINE__, fcount, x, y, stride, contrast, src1, src2);
+                }
+                ADDTIME("find_block_motion call","x = %d  y = %d\n", x, y);
+#endif
+                find_block_motion(deshake, src1, src2, x, y, stride, &mv);
+                if (mv.x != -1 && mv.y != -1) {
 #ifdef EXPER01
                     if (OPTMASK(OPT_LOG_CALL_FIND_BLOCK_MOTION)) {
-                         av_log(deshake,AV_LOG_ERROR,"%s %d: (fcount =%3lu) calling find_block_motion:  x=%3d   y=%3d   stride=%3d   (contrast=%3d, src1 = %p, src2 = %p)\n",
-                                __func__,__LINE__, fcount, x, y, stride, contrast, src1, src2);
+                        av_log(NULL,AV_LOG_ERROR,"mv returns %d, %d\n", mv.x, mv.y);
                     }
-                    ADDTIME("find_block_motion call","x = %d  y = %d\n", x, y);
 #endif
-                    find_block_motion(deshake, src1, src2, x, y, stride, &mv);
-                    if (mv.x != -1 && mv.y != -1) {
+                    if ((n = ++counts[mv.x + deshake->rx][mv.y + deshake->ry]) > count_max_value) {
+                        count_max_value = n;
+                        t->vector.x = mv.x;
+                        t->vector.y = mv.y;
+                        DESHAKE_WINNING_COUNT = count_max_value;
+                        DESHAKE_WINNING_MV.x = mv.x;
+                        DESHAKE_WINNING_MV.y = mv.y;
+                    }
+                    if (x > deshake->rx && y > deshake->ry) {
+                        angles[pos++] = block_angle(x, y, 0, 0, &mv);
+                    }
+                    center_x += mv.x;
+                    center_y += mv.y;
 #ifdef EXPER01
-                         if (OPTMASK(OPT_LOG_CALL_FIND_BLOCK_MOTION)) {
-                              av_log(NULL,AV_LOG_ERROR,"mv returns %d, %d\n", mv.x, mv.y);
-                         }
-#endif
-                         if ((n = ++counts[mv.x + deshake->rx][mv.y + deshake->ry]) > count_max_value) {
-                              count_max_value = n;
-                              t->vector.x = mv.x;
-                              t->vector.y = mv.y;
-                              DESHAKE_WINNING_COUNT = count_max_value;
-                              DESHAKE_WINNING_MV.x = mv.x;
-                              DESHAKE_WINNING_MV.y = mv.y;
-                         }
-                         if (x > deshake->rx && y > deshake->ry) {
-                              angles[pos++] = block_angle(x, y, 0, 0, &mv);
-                         }
-                         center_x += mv.x;
-                         center_y += mv.y;
-#ifdef EXPER01
-                         if (OPTMASK(OPT_BLOCK_VECTORS)) {
-                              static int fuss=10;
-                              if ((arrow = av_malloc(sizeof(ArrowAnnotation)))) {
-                                   float fx = 1.0, fy = 1.0;
-                                   arrow->startx = x;
-                                   arrow->starty = y;
-                                   if (OPTMASK(OPT_BLOCK_VECTORS_NORMALIZE)) {
-                                        arrow->endx = x + (int)((float)mv.x * 8.0/deshake->rx); //+ deshake->rx; // Normalize for better visiblity.
-                                        arrow->endy = y + (int)((float)mv.y * 8.0/deshake->ry);
-                                        fx = (float)arrow->endx/(x + (float)mv.x + deshake->rx);
-                                        fy = (float)arrow->endy/(y + (float)mv.y + deshake->ry);
-                                   } else {
-                                        arrow->endx = x + mv.x;
-                                        arrow->endy = y + mv.y;
-                                   }
-                                   if (fuss && (mv.x || mv.y)) {
+                    if (OPTMASK(OPT_BLOCK_VECTORS)) {
+                        static int fuss=10;
+                        if ((arrow = av_malloc(sizeof(ArrowAnnotation)))) {
+                            float fx = 1.0, fy = 1.0;
+                            arrow->startx = x;
+                            arrow->starty = y;
+                            if (OPTMASK(OPT_BLOCK_VECTORS_NORMALIZE)) {
+                                arrow->endx = x + (int)((float)mv.x * 8.0/deshake->rx); //+ deshake->rx; // Normalize for better visiblity.
+                                arrow->endy = y + (int)((float)mv.y * 8.0/deshake->ry);
+                                fx = (float)arrow->endx/(x + (float)mv.x + deshake->rx);
+                                fy = (float)arrow->endy/(y + (float)mv.y + deshake->ry);
+                            } else {
+                                arrow->endx = x + mv.x;
+                                arrow->endy = y + mv.y;
+                            }
+                            if (fuss && (mv.x || mv.y)) {
 //                                   av_log(deshake,AV_LOG_ERROR,"%s %d: fx=%f, fy=%f, x=%d, mv.x=%d, deshake->rx=%d, startx=%d,  endx=%d, y=%d, mv.y=%d, deshake->ry=%d, starty=%d, endy=%d\n",
 //                                          __func__,__LINE__, fx, fy, x, mv.x, deshake->rx, arrow->startx, arrow->endx, y, mv.y, deshake->ry, arrow->starty, arrow->endy);
-                                        fuss--;
-                                   }
-                                   arrow->count = counts[mv.x + deshake->rx][mv.y + deshake->ry];
-                                   arrow->highlight = 0;
-                                   arrow->next = NULL;
-                                   arrow->annotation = av_asprintf("%d %d %d %d counts=%d", x, y, mv.x, mv.y, counts[mv.x + deshake->rx][mv.y + deshake->ry]);
-                                   arrow_index=0;
-                                   for (a2 = &arrow_root ; *a2  ; a2 = &(*a2)->next, arrow_index++) {
-                                        if (OPTMASK(OPT_LOG_BLOCK_VECTORS_INNER_LOOP)) {
+                                fuss--;
+                            }
+                            arrow->count = counts[mv.x + deshake->rx][mv.y + deshake->ry];
+                            arrow->highlight = 0;
+                            arrow->next = NULL;
+                            arrow->annotation = av_asprintf("%d %d %d %d counts=%d", x, y, mv.x, mv.y, counts[mv.x + deshake->rx][mv.y + deshake->ry]);
+                            arrow_index=0;
+                            for (a2 = &arrow_root ; *a2  ; a2 = &(*a2)->next, arrow_index++) {
+                                if (OPTMASK(OPT_LOG_BLOCK_VECTORS_INNER_LOOP)) {
 //                                        av_log(deshake,AV_LOG_ERROR,"%s %d: index=%d a2 = %p  *a2 = %p  (*a2)->next = %p  arrow_root is at %p  arrow_root = %p  x = %4d  y = %4d  mv.x = %4d  mv.y = %4d  ...rx = %4d  ...ry = %4d\n",
-                                             av_log(deshake,AV_LOG_ERROR,"%s %d: index=%2d  x=%3d  y=%3d  mv.x=%2d  mv.y=%2d  rx=%3d  ry=%3d\n",
-                                                    __func__, __LINE__, ((*a2)? (*a2)->index : -1), /* a2, *a2, ((*a2)? (*a2)->next : NULL),  &arrow_root, arrow_root, */ x, y, mv.x, mv.y, deshake->rx, deshake->ry);
-                                        }
-                                   }
-                                   if (OPTMASK(OPT_LOG_BLOCK_VECTORS_LOOP_FINAL)) {
-                                        av_log(deshake,AV_LOG_ERROR,"%s %d: arw.index=%2d start=%3d,%3d end=%3d,%3d count=%3d x=%3d y=%3d mv.x=%3d mv.y=%3d rx=%3d ry=%3d) annotation=\"%s\"\n",
-                                               __func__,__LINE__,arrow_index, arrow->startx, arrow->starty, arrow->endx, arrow->endy, arrow->count, x, y, mv.x, mv.y, deshake->rx, deshake->ry,  arrow->annotation);
-                                   }
-                                   arrow->index = arrow_index;
-                                   (*a2) = arrow;
-                              } else {
-                                   av_log(deshake,AV_LOG_ERROR,"%s %d: arrow annotation alloc failure.\n", __func__, __LINE__);
-                              }
-                         }
-#endif
+                                    av_log(deshake,AV_LOG_ERROR,"%s %d: index=%2d  x=%3d  y=%3d  mv.x=%2d  mv.y=%2d  rx=%3d  ry=%3d\n",
+                                           __func__, __LINE__, ((*a2)? (*a2)->index : -1), /* a2, *a2, ((*a2)? (*a2)->next : NULL),  &arrow_root, arrow_root, */ x, y, mv.x, mv.y, deshake->rx, deshake->ry);
+                                }
+                            }
+                            if (OPTMASK(OPT_LOG_BLOCK_VECTORS_LOOP_FINAL)) {
+                                av_log(deshake,AV_LOG_ERROR,"%s %d: arw.index=%2d start=%3d,%3d end=%3d,%3d count=%3d x=%3d y=%3d mv.x=%3d mv.y=%3d rx=%3d ry=%3d) annotation=\"%s\"\n",
+                                       __func__,__LINE__,arrow_index, arrow->startx, arrow->starty, arrow->endx, arrow->endy, arrow->count, x, y, mv.x, mv.y, deshake->rx, deshake->ry,  arrow->annotation);
+                            }
+                            arrow->index = arrow_index;
+                            (*a2) = arrow;
+                        } else {
+                            av_log(deshake,AV_LOG_ERROR,"%s %d: arrow annotation alloc failure.\n", __func__, __LINE__);
+                        }
                     }
-               }
-          }
-     }
-     ADDTIME("after motion search loop","\n");
-     if (pos) {
-          center_x /= pos;
-          center_y /= pos;
-
-          t->angle = clean_mean(angles, pos);
-          if (t->angle < 0.001)
-               t->angle = 0;
-     } else {
-          t->angle = 0;
-     }
-
-     p_x = (center_x - width / 2);
-     p_y = (center_y - height / 2);
-     t->vector.x += (cos(t->angle)-1)*p_x  -  sin(t->angle)   *p_y;
-     t->vector.y +=  sin(t->angle)   *p_x  + (cos(t->angle)-1)*p_y;
-#ifdef EXPER01
-     pre_clip_x = t->vector.x;
-     pre_clip_y = t->vector.y;
 #endif
-     // Clamp max shift & rotation?
-     t->vector.x = av_clipf(t->vector.x, -deshake->rx * 2, deshake->rx * 2);
-     t->vector.y = av_clipf(t->vector.y, -deshake->ry * 2, deshake->ry * 2);
-     t->angle = av_clipf(t->angle, -0.1, 0.1);
+                }
+            }
+        }
+    }
+    ADDTIME("after motion search loop","\n");
+    if (pos) {
+        center_x /= pos;
+        center_y /= pos;
 
-     av_free(angles);
+        t->angle = clean_mean(angles, pos);
+        if (t->angle < 0.001)
+            t->angle = 0;
+    } else {
+        t->angle = 0;
+    }
+
+    p_x = (center_x - width / 2);
+    p_y = (center_y - height / 2);
+    t->vector.x += (cos(t->angle)-1)*p_x  -  sin(t->angle)   *p_y;
+    t->vector.y +=  sin(t->angle)   *p_x  + (cos(t->angle)-1)*p_y;
 #ifdef EXPER01
-     if (OPTMASK(OPT_LOG_FIND_MOTION_FINAL)) {
-          av_log(deshake,AV_LOG_ERROR,"%s %d: (Winner: count =%5d: x =%4d y =%4d) t->vector: { %8.3f %8.3f %8.3f } (pre-clip x and y: %8.3f %8.3f)  pos =%4d   center_x =%4d   center_y =%4d  px =%8.3f  py =%8.3f\n",
-                 __func__,__LINE__,DESHAKE_WINNING_COUNT, DESHAKE_WINNING_MV.x, DESHAKE_WINNING_MV.y, t->vector.x,t->vector.y,t->angle, pre_clip_x, pre_clip_y,  pos, center_x, center_y, p_x, p_y);
-     }
-     ADDTIME("exit","\n");
+    pre_clip_x = t->vector.x;
+    pre_clip_y = t->vector.y;
+#endif
+    // Clamp max shift & rotation?
+    t->vector.x = av_clipf(t->vector.x, -deshake->rx * 2, deshake->rx * 2);
+    t->vector.y = av_clipf(t->vector.y, -deshake->ry * 2, deshake->ry * 2);
+    t->angle = av_clipf(t->angle, -0.1, 0.1);
+
+    av_free(angles);
+#ifdef EXPER01
+    if (OPTMASK(OPT_LOG_FIND_MOTION_FINAL)) {
+        av_log(deshake,AV_LOG_ERROR,"%s %d: (Winner: count =%5d: x =%4d y =%4d) t->vector: { %8.3f %8.3f %8.3f } (pre-clip x and y: %8.3f %8.3f)  pos =%4d   center_x =%4d   center_y =%4d  px =%8.3f  py =%8.3f\n",
+               __func__,__LINE__,DESHAKE_WINNING_COUNT, DESHAKE_WINNING_MV.x, DESHAKE_WINNING_MV.y, t->vector.x,t->vector.y,t->angle, pre_clip_x, pre_clip_y,  pos, center_x, center_y, p_x, p_y);
+    }
+    ADDTIME("exit","\n");
 #endif
 }
 
@@ -623,10 +623,10 @@ static void end_frame(AVFilterLink *link)
     static int fuss = 0;
     static int maxfuss = 5;
     if (DESHAKE_ZOOM >= 0)
-         t.zoom = orig.zoom = DESHAKE_ZOOM;
+        t.zoom = orig.zoom = DESHAKE_ZOOM;
     if (maxfuss && link != NULL && link->dstpad != NULL) {
 //         av_log(deshake,AV_LOG_ERROR,"%s %s %d: end_frame in link is at %p\n", __FILE__,__func__,__LINE__,link->dstpad->end_frame);
-         maxfuss--;
+        maxfuss--;
     }
 #endif
 
@@ -636,12 +636,12 @@ static void end_frame(AVFilterLink *link)
     alpha = (DESHAKE_ALPHA > 0)? DESHAKE_ALPHA : (deshake->reference_frames)? 2.0 / deshake->reference_frames : 0.5;
 
     if (!fuss) {
-         av_log(deshake,AV_LOG_DEBUG,"%s %d: alpha =%4.2f  reference_frames = %d  deshake->ref =%p\n", __func__,__LINE__,alpha,deshake->reference_frames, deshake->ref);
-         fuss++;
+        av_log(deshake,AV_LOG_DEBUG,"%s %d: alpha =%4.2f  reference_frames = %d  deshake->ref =%p\n", __func__,__LINE__,alpha,deshake->reference_frames, deshake->ref);
+        fuss++;
     }
     if (deshake->cx < 0 || deshake->cy < 0 || deshake->cw < 0 || deshake->ch < 0) {
-         // Find the most likely global motion for the current frame
-         find_motion(deshake, src1, in->data[0], link->w, link->h, in->linesize[0], &t);
+        // Find the most likely global motion for the current frame
+        find_motion(deshake, src1, in->data[0], link->w, link->h, in->linesize[0], &t);
     } else {
         deshake->cx = FFMIN(deshake->cx, link->w);
         deshake->cy = FFMIN(deshake->cy, link->h);
@@ -662,8 +662,8 @@ static void end_frame(AVFilterLink *link)
 
 #ifdef EXPER01
     if (OPTMASK(OPT_LOG_POST_FIND_MOTION_01)) {
-         av_log(deshake,AV_LOG_ERROR,"%s %d: %8lu: %f %f %f   %f %f %f   %f %f %f   %f %f %f\n", \
-                __func__,__LINE__, fcount, orig.vector.x, deshake->avg.vector.x, t.vector.x, orig.vector.y, deshake->avg.vector.y, t.vector.y, orig.angle, deshake->avg.angle, t.angle, orig.zoom, deshake->avg.zoom, t.zoom);
+        av_log(deshake,AV_LOG_ERROR,"%s %d: %8lu: %f %f %f   %f %f %f   %f %f %f   %f %f %f\n", \
+               __func__,__LINE__, fcount, orig.vector.x, deshake->avg.vector.x, t.vector.x, orig.vector.y, deshake->avg.vector.y, t.vector.y, orig.angle, deshake->avg.angle, t.angle, orig.zoom, deshake->avg.zoom, t.zoom);
     }
 #endif
     // Generate a one-sided moving exponential average
@@ -678,8 +678,8 @@ static void end_frame(AVFilterLink *link)
     end.x = t.vector.x;
     end.y = t.vector.y;
     if (OPTMASK(OPT_LOG_POST_FIND_MOTION_01)) {
-         av_log(deshake,AV_LOG_ERROR,"%s %d: %8lu: %f %f %f   %f %f %f   %f %f %f   %f %f %f\n", \
-                __func__,__LINE__, fcount, orig.vector.x, deshake->avg.vector.x, t.vector.x, orig.vector.y, deshake->avg.vector.y, t.vector.y, orig.angle, deshake->avg.angle, t.angle, orig.zoom, deshake->avg.zoom, t.zoom);
+        av_log(deshake,AV_LOG_ERROR,"%s %d: %8lu: %f %f %f   %f %f %f   %f %f %f   %f %f %f\n", \
+               __func__,__LINE__, fcount, orig.vector.x, deshake->avg.vector.x, t.vector.x, orig.vector.y, deshake->avg.vector.y, t.vector.y, orig.angle, deshake->avg.angle, t.angle, orig.zoom, deshake->avg.zoom, t.zoom);
     }
 #endif
     T_OP(t,-=,deshake->avg);  // Remove the average from the current motion to detect the motion that is not on purpose, just as jitter from bumping the camera
@@ -690,8 +690,8 @@ static void end_frame(AVFilterLink *link)
 
     // Write statistics to file if requested.
     if (deshake->fp) {
-         statmsg = av_asprintf("%8lu: %6.2f  %6.2f  %6.2f    %6.2f  %6.2f  %6.2f    %6.2f  %6.2f  %6.2f    %6.2f  %6.2f  %6.2f\n", \
-                               fcount, orig.vector.x, orig.vector.y, deshake->avg.vector.x, deshake->avg.vector.y, t.vector.x, t.vector.y, orig.angle, deshake->avg.angle, t.angle, orig.zoom, deshake->avg.zoom, t.zoom);
+        statmsg = av_asprintf("%8lu: %6.2f  %6.2f  %6.2f    %6.2f  %6.2f  %6.2f    %6.2f  %6.2f  %6.2f    %6.2f  %6.2f  %6.2f\n", \
+                              fcount, orig.vector.x, orig.vector.y, deshake->avg.vector.x, deshake->avg.vector.y, t.vector.x, t.vector.y, orig.angle, deshake->avg.angle, t.angle, orig.zoom, deshake->avg.zoom, t.zoom);
         fwrite(statmsg, sizeof(char), strlen(statmsg), deshake->fp);
 #ifdef EXPER01
         fflush(deshake->fp);
@@ -734,27 +734,27 @@ static void end_frame(AVFilterLink *link)
 
 #ifdef EXPER01
     {
-         int arrow_color = 224;
-         int highlight_color = 255;
-         if (OPTMASK(OPT_BLANK_FRAME)) {
-              // Put the conversion macros here for convenience; someone will want to use them someday, no doubt.
-              int yp = RGB_TO_Y_CCIR(0, 0, 0);
-              int u = RGB_TO_U_CCIR(0, 0, 0, 0);
-              int v = RGB_TO_V_CCIR(0, 0, 0, 0);
-              for (y = 0 ; y < CHROMA_HEIGHT(link) ; y++) {
-                   for (x = 0 ; x < CHROMA_WIDTH(link) ; x++) {
-                        out->data[1][y * out->linesize[1] + x] = u;
-                        out->data[2][y * out->linesize[2] + x] = v;
-                   }
-              }
-              for (y = 0 ; y < link->h ; y++) {
-                   for (x = 0 ; x < link->w ; x++) {
-                        out->data[0][y * out->linesize[0] + x] = yp;
-                   }
-              }
-              arrow_color = highlight_color = 255;
-         }
-         draw_vectors(deshake, out, link->w, link->h, out->linesize[0], &t, &orig, FFMAX(16/deshake->rx,1), arrow_color, highlight_color);
+        int arrow_color = 224;
+        int highlight_color = 255;
+        if (OPTMASK(OPT_BLANK_FRAME)) {
+            // Put the conversion macros here for convenience; someone will want to use them someday, no doubt.
+            int yp = RGB_TO_Y_CCIR(0, 0, 0);
+            int u = RGB_TO_U_CCIR(0, 0, 0, 0);
+            int v = RGB_TO_V_CCIR(0, 0, 0, 0);
+            for (y = 0 ; y < CHROMA_HEIGHT(link) ; y++) {
+                for (x = 0 ; x < CHROMA_WIDTH(link) ; x++) {
+                    out->data[1][y * out->linesize[1] + x] = u;
+                    out->data[2][y * out->linesize[2] + x] = v;
+                }
+            }
+            for (y = 0 ; y < link->h ; y++) {
+                for (x = 0 ; x < link->w ; x++) {
+                    out->data[0][y * out->linesize[0] + x] = yp;
+                }
+            }
+            arrow_color = highlight_color = 255;
+        }
+        draw_vectors(deshake, out, link->w, link->h, out->linesize[0], &t, &orig, FFMAX(16/deshake->rx,1), arrow_color, highlight_color);
     }
 #endif
     ADDTIME("final processing","\n");
@@ -774,7 +774,7 @@ static void end_frame(AVFilterLink *link)
     fcount++;
     ADDTIME("done","\n");
     if (OPTMASK(OPT_DUMP_TIME_TRACK)) {
-         dump_time_track(NULL);
+        dump_time_track(NULL);
     }
     delete_time_track();
 #endif
@@ -813,11 +813,11 @@ static void end_frame(AVFilterLink *link)
  */
 static void draw_vectors(DeshakeContext *deshake, AVFilterBufferRef *avbuf, int w, int h, int stride, Transform *t, Transform *orig, int normalizing_scale, int color, int highlight_color)
 {
-     int i, j, final_vector_params[][2] = {
-          { deshake->avg.vector.x,  deshake->avg.vector.y  },
-          { orig->vector.x,         orig->vector.y         },
-          { t->vector.x,            t->vector.y            }
-     };
+    int i, j, final_vector_params[][2] = {
+        { deshake->avg.vector.x,  deshake->avg.vector.y  },
+        { orig->vector.x,         orig->vector.y         },
+        { t->vector.x,            t->vector.y            }
+    };
 
 /** convenience macros for accessing final_vector_params[][] */
 #define AVG_X (final_vector_params[0][0])
@@ -829,60 +829,60 @@ static void draw_vectors(DeshakeContext *deshake, AVFilterBufferRef *avbuf, int 
 
 
     if (OPTMASK(OPT_BLOCK_VECTORS)) {
-          if (DESHAKE_WINNING_COUNT) { // Do this first.
-               static int fuss = 8;
-               if (fuss) {
-                    // av_log(deshake,AV_LOG_ERROR,"%s %d: winning count: %d  winning x: %d  winning y: %d\n", __func__, __LINE__, DESHAKE_WINNING_COUNT, DESHAKE_WINNING_MV.x, DESHAKE_WINNING_MV.y);
-                    fuss--;
-               }
-               exper01_draw_arrow(avbuf, DESHAKE_WINNING_MV.x, DESHAKE_WINNING_MV.y, 0, 0, w, h, stride, color); // Not highlight color
-          }
-          draw_vectors_r(deshake, arrow_root, avbuf, w, h, stride, normalizing_scale, color, highlight_color);
-     }
-     arrow_root = NULL;
-     if (OPTMASK(OPT_FINAL_VECTOR_ORIG_TO_FINAL) || OPTMASK(OPT_FINAL_VECTOR_AVG_TO_FINAL)) {
-          static int fuss = 10;
-          if (fuss || OPTMASK(OPT_FLOAT_04)) {
-               static unsigned long frame = 0;
-               if (OPTMASK(OPT_FLOAT_03)) {
-                    av_log(deshake,AV_LOG_ERROR,"%s %4d: %6lu: orig x=%4d, orig y=%4d, avg x=%4d, avg y=%4d, final x=%4d, final y=%4d fcount =%6lu  icount =%6lu\n",
-                           __func__,__LINE__,frame,
-                           final_vector_params[1][0], final_vector_params[1][1], final_vector_params[0][0], final_vector_params[0][1],
-                           final_vector_params[2][0], final_vector_params[2][1], fcount, icount);
-               }
-               fuss--;
-               frame++;
-          }
-          exper01_draw_line(avbuf, w/2 -10, h/2,     w/2 + 10, h/2,      w, h, stride, color/4); // Center cross
-          exper01_draw_line(avbuf, w/2,     h/2 -10, w/2,      h/2 + 10, w, h, stride, color/4);
-          // Scaling, sign, normalizing
-          for (i = 0 ; i < 3 ; i++) {
-               for (j = 0 ; j < 2 ; j++) {
-                    final_vector_params[i][j] *= (OPTMASK(OPT_FINAL_VECTORS_NORMALIZE)) ? -normalizing_scale : -1;
-                    final_vector_params[i][j] += (j) ? h/2 : w/2 ;
-               }
-          }
-          if (OPTMASK(OPT_FINAL_VECTOR_ORIG_TO_FINAL)) {
-               exper01_draw_arrow(avbuf, T_X, T_Y, ORIG_X, ORIG_Y, w, h, stride, highlight_color);
-          }
-          if (OPTMASK(OPT_FINAL_VECTOR_AVG_TO_FINAL)) {
-               exper01_draw_arrow(avbuf, T_X, T_Y, AVG_X, AVG_Y, w, h, stride, highlight_color);
-          }
-     }
+        if (DESHAKE_WINNING_COUNT) { // Do this first.
+            static int fuss = 8;
+            if (fuss) {
+                // av_log(deshake,AV_LOG_ERROR,"%s %d: winning count: %d  winning x: %d  winning y: %d\n", __func__, __LINE__, DESHAKE_WINNING_COUNT, DESHAKE_WINNING_MV.x, DESHAKE_WINNING_MV.y);
+                fuss--;
+            }
+            exper01_draw_arrow(avbuf, DESHAKE_WINNING_MV.x, DESHAKE_WINNING_MV.y, 0, 0, w, h, stride, color); // Not highlight color
+        }
+        draw_vectors_r(deshake, arrow_root, avbuf, w, h, stride, normalizing_scale, color, highlight_color);
+    }
+    arrow_root = NULL;
+    if (OPTMASK(OPT_FINAL_VECTOR_ORIG_TO_FINAL) || OPTMASK(OPT_FINAL_VECTOR_AVG_TO_FINAL)) {
+        static int fuss = 10;
+        if (fuss || OPTMASK(OPT_FLOAT_04)) {
+            static unsigned long frame = 0;
+            if (OPTMASK(OPT_FLOAT_03)) {
+                av_log(deshake,AV_LOG_ERROR,"%s %4d: %6lu: orig x=%4d, orig y=%4d, avg x=%4d, avg y=%4d, final x=%4d, final y=%4d fcount =%6lu  icount =%6lu\n",
+                       __func__,__LINE__,frame,
+                       final_vector_params[1][0], final_vector_params[1][1], final_vector_params[0][0], final_vector_params[0][1],
+                       final_vector_params[2][0], final_vector_params[2][1], fcount, icount);
+            }
+            fuss--;
+            frame++;
+        }
+        exper01_draw_line(avbuf, w/2 -10, h/2,     w/2 + 10, h/2,      w, h, stride, color/4); // Center cross
+        exper01_draw_line(avbuf, w/2,     h/2 -10, w/2,      h/2 + 10, w, h, stride, color/4);
+        // Scaling, sign, normalizing
+        for (i = 0 ; i < 3 ; i++) {
+            for (j = 0 ; j < 2 ; j++) {
+                final_vector_params[i][j] *= (OPTMASK(OPT_FINAL_VECTORS_NORMALIZE)) ? -normalizing_scale : -1;
+                final_vector_params[i][j] += (j) ? h/2 : w/2 ;
+            }
+        }
+        if (OPTMASK(OPT_FINAL_VECTOR_ORIG_TO_FINAL)) {
+            exper01_draw_arrow(avbuf, T_X, T_Y, ORIG_X, ORIG_Y, w, h, stride, highlight_color);
+        }
+        if (OPTMASK(OPT_FINAL_VECTOR_AVG_TO_FINAL)) {
+            exper01_draw_arrow(avbuf, T_X, T_Y, AVG_X, AVG_Y, w, h, stride, highlight_color);
+        }
+    }
 }
 
 /** Recursive element for vector drawing */
 static void draw_vectors_r(DeshakeContext *deshake, const ArrowAnnotation *root, AVFilterBufferRef *avbuf, int w, int h, int stride, int normalizing_scale, int color, int highlight_color)
 {
-     if (root)
-     {
-          if (DESHAKE_WINNING_MV.x == root->startx && DESHAKE_WINNING_MV.y == root->starty) {
-               exper01_draw_arrow(avbuf, /* root->startx, root->starty,*/ 0, 0, root->startx, root->starty, w, h, stride, color);
-          }
-          exper01_draw_arrow(avbuf, /* root->startx, root->starty,*/ root->endx, root->endy, root->startx, root->starty, w, h, stride, color);
-          draw_vectors_r(deshake, root->next, avbuf, w, h, stride, normalizing_scale, color, highlight_color);
-          av_free(root);
-     }
+    if (root)
+    {
+        if (DESHAKE_WINNING_MV.x == root->startx && DESHAKE_WINNING_MV.y == root->starty) {
+            exper01_draw_arrow(avbuf, /* root->startx, root->starty,*/ 0, 0, root->startx, root->starty, w, h, stride, color);
+        }
+        exper01_draw_arrow(avbuf, /* root->startx, root->starty,*/ root->endx, root->endy, root->startx, root->starty, w, h, stride, color);
+        draw_vectors_r(deshake, root->next, avbuf, w, h, stride, normalizing_scale, color, highlight_color);
+        av_free(root);
+    }
 }
 /** @}*/
 
@@ -916,8 +916,8 @@ static av_cold int init(AVFilterContext *ctx, const char *args, void *opaque)
     deshake->contrast = CONTRAST_DEFAULT;
     deshake->search = SEARCH_DEFAULT;
     deshake->interpolate_method_luma = INTERPOLATE_METHOD_LUMA_DEFAULT
-    deshake->interpolate_method_chroma = INTERPOLATE_METHOD_CHROMA_DEFAULT
-    deshake->reference_frames = 20;
+        deshake->interpolate_method_chroma = INTERPOLATE_METHOD_CHROMA_DEFAULT
+        deshake->reference_frames = 20;
 
     deshake->cw = -1;
     deshake->ch = -1;
@@ -932,18 +932,18 @@ static av_cold int init(AVFilterContext *ctx, const char *args, void *opaque)
     if (args) {
 #ifdef EXPER01
 /*
-static const AVOption drawtext_options[]= {
-{"search-area" , "restricted search area"   ,  OFFSET(search_area),           AV_OPT_TYPE_STRING, {.str=NULL},  CHAR_MIN, CHAR_MAX },
-{"blocksize"   , "block size"               ,  OFFSET(blocksize),             AV_OPT_TYPE_INT,    {.dbl=8   },  8, 128             },
-{NULL}
-};
- */
+  static const AVOption drawtext_options[]= {
+  {"search-area" , "restricted search area"   ,  OFFSET(search_area),           AV_OPT_TYPE_STRING, {.str=NULL},  CHAR_MIN, CHAR_MAX },
+  {"blocksize"   , "block size"               ,  OFFSET(blocksize),             AV_OPT_TYPE_INT,    {.dbl=8   },  8, 128             },
+  {NULL}
+  };
+*/
         sscanf(args, "%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%Li:%f:%255s",
                &deshake->cx, &deshake->cy, &deshake->cw, &deshake->ch,
                &deshake->rx, &deshake->ry, (int *)&deshake->edge,
                &deshake->blocksize, &deshake->contrast, (int *)&deshake->search, &DESHAKE_ZOOM, (long long int*)&deshake->extra.optmask, &DESHAKE_ALPHA, filename);
         if (DESHAKE_ALPHA >= 0) {
-             DESHAKE_ALPHA = av_clipf(DESHAKE_ALPHA,0.01,0.99);
+            DESHAKE_ALPHA = av_clipf(DESHAKE_ALPHA,0.01,0.99);
         }
         global_option_01 = OPTMASK(OPT_GLOBAL_01);
         global_option_02 = OPTMASK(OPT_GLOBAL_02);
@@ -965,17 +965,17 @@ static const AVOption drawtext_options[]= {
 
     }
     if (*filename) {
-         if ((deshake->fp = fopen(filename, "w")) != NULL) {
-              statmsg = av_asprintf("          %7s %7s %7s   %7s %7s %7s   %7s %7s %7s   %7s %7s %7s\n\n",
-                                    "Or x", "Or y", "Av x", "Av y", "Fin x", "Fin y", "Or ang", "Av ang", "Fin ang", "Or zm", "Av zm", "Fin zm");
-              fwrite(statmsg, sizeof(char), strlen(statmsg), deshake->fp);
+        if ((deshake->fp = fopen(filename, "w")) != NULL) {
+            statmsg = av_asprintf("          %7s %7s %7s   %7s %7s %7s   %7s %7s %7s   %7s %7s %7s\n\n",
+                                  "Or x", "Or y", "Av x", "Av y", "Fin x", "Fin y", "Or ang", "Av ang", "Fin ang", "Or zm", "Av zm", "Fin zm");
+            fwrite(statmsg, sizeof(char), strlen(statmsg), deshake->fp);
 #ifdef EXPER01
-              fflush(deshake->fp);
+            fflush(deshake->fp);
 #endif
-              av_free(statmsg);
-         } else {
-              av_log(deshake,AV_LOG_ERROR,"Failed to open stat file %s: %s\n", filename, strerror(errno));
-         }
+            av_free(statmsg);
+        } else {
+            av_log(deshake,AV_LOG_ERROR,"Failed to open stat file %s: %s\n", filename, strerror(errno));
+        }
     }
 
     // Quadword align left edge of box for MMX code; adjust width if necessary
@@ -992,15 +992,15 @@ static const AVOption drawtext_options[]= {
            deshake->rx, deshake->ry, deshake->edge, deshake->blocksize * 2, deshake->contrast, deshake->search, DESHAKE_ZOOM,
            (unsigned long)p_32_01[1], (unsigned long)p_32_01[0], DESHAKE_ALPHA, (*filename? "  log file: " : " oh "), (*filename? filename : " no "));
     if (deshake->extra.optmask) {
-         av_log(ctx,AV_LOG_VERBOSE,"Enabled deshake options: ");
-         for (i = 0 ; i < get_n_optmask_selections() ; i++) {
-              osp = &optmask_selections[i];
-              if (deshake->extra.optmask & osp->mask) {
-                   av_log(NULL,AV_LOG_VERBOSE,"%s%s",(nopts? ", " : ""), osp->shortdescr);
-                   nopts++;
-              }
-         }
-         av_log(NULL,AV_LOG_VERBOSE,"\n");
+        av_log(ctx,AV_LOG_VERBOSE,"Enabled deshake options: ");
+        for (i = 0 ; i < get_n_optmask_selections() ; i++) {
+            osp = &optmask_selections[i];
+            if (deshake->extra.optmask & osp->mask) {
+                av_log(NULL,AV_LOG_VERBOSE,"%s%s",(nopts? ", " : ""), osp->shortdescr);
+                nopts++;
+            }
+        }
+        av_log(NULL,AV_LOG_VERBOSE,"\n");
     }
 #else
     av_log(ctx, AV_LOG_INFO, "cx: %d, cy: %d, cw: %d, ch: %d, rx: %d, ry: %d, edge: %d blocksize: %d contrast: %d search: %d  %s\n",
@@ -1076,15 +1076,15 @@ AVFilter avfilter_vf_deshake = {
     .query_formats = query_formats,
 
     .inputs    = (const AVFilterPad[]) {{ .name       = "default",
-                                    .type             = AVMEDIA_TYPE_VIDEO,
-                                    .draw_slice       = draw_slice,
-                                    .end_frame        = end_frame,
-                                    .config_props     = config_props,
-                                    .min_perms        = AV_PERM_READ, },
-                                  { .name = NULL}},
+                                          .type             = AVMEDIA_TYPE_VIDEO,
+                                          .draw_slice       = draw_slice,
+                                          .end_frame        = end_frame,
+                                          .config_props     = config_props,
+                                          .min_perms        = AV_PERM_READ, },
+                                        { .name = NULL}},
 
     .outputs   = (const AVFilterPad[]) {{ .name       = "default",
-                                    .type             = AVMEDIA_TYPE_VIDEO, },
-                                  { .name = NULL}},
+                                          .type             = AVMEDIA_TYPE_VIDEO, },
+                                        { .name = NULL}},
 };
 /** @}*/

@@ -42,6 +42,7 @@ OptmaskSelection optmask_selections[] =
     { 0x0000000000020000, "log post find motion 04"          , "log processing following find_motion pt. 04"                                    },
     { 0x0000000000040000, "use time track list"              , "enable the generation of time marker linked list"                               },
     { 0x0000000000080000, "dump time track"                  , "dump time marker or full track, depending on 'use time track list' option"      },
+    { 0x0000000000100000, "log entering transform"           , "log entry into transform function"                                              },
     { 0x0010000000000000, "global option 01"                 , "enable global option 01"                                                        },
     { 0x0020000000000000, "global option 02"                 , "enable global option 02"                                                        },
     { 0x0040000000000000, "global option 03"                 , "enable global option 03"                                                        },

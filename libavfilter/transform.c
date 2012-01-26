@@ -186,9 +186,7 @@ void avfilter_transform(const uint8_t *src, uint8_t *dst,
     float x_s, y_s;
     uint8_t (*func)(float, float, const uint8_t *, int, int, int, uint8_t) = NULL;
 #ifdef EXPER01
-    static int fuss=5, fuss2=5;
-    if (fuss && 0) {
-        fuss--;
+    if (OPTMASK_G(deshake_extra->optmask,OPT_LOG_ENTERING_TRANSFORM)) {
         av_log(NULL,AV_LOG_ERROR,"%s %s %d: (info) def %3d fill %d src_stride %d  dst_stride %d  width: %d  height: %d  matrix [%f %f %f %f %f %f %f %f %f]  src = %p  dst = %p\n",
                __FILE__,__func__,__LINE__, def, fill, src_stride, dst_stride, width, height, matrix[0], matrix[1], matrix[2], matrix[3], matrix[4], matrix[5], matrix[6], matrix[7], matrix[8],
                src, dst);

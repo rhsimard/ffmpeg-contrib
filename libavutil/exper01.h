@@ -15,6 +15,7 @@
 #include <time.h>
 #include <sys/time.h>
 #include "libavfilter/avfilter.h"
+#include "libavutil/avassert.h"
 
 /**
  * Draw a line on the image in the specified buffer, for now, simply plane 0;
@@ -68,6 +69,7 @@ enum opt_select { OPT_NULL_TRANSFORM,
                   OPT_LOG_POST_FIND_MOTION_04,
                   OPT_USE_TIME_TRACK_LINKED_LIST,
                   OPT_DUMP_TIME_TRACK,
+                  OPT_LOG_ENTERING_TRANSFORM,
                   OPT_GLOBAL_01,
                   OPT_GLOBAL_02,
                   OPT_GLOBAL_03,
@@ -133,7 +135,6 @@ typedef struct {
     float               zoom;             /** substitute zoom for test                                   */
     int                 diff_limit;       /** Maximum diff from SAD that can still be accepted           */
     char               *logfile;          /** Optional log file                                          */
-    int                 reference_frames; /** Number of reference frames (defines averaging window)      */
     char               *oldopts;          /** Option string when user chooses old style                  */
     int                 interpolate_luma, interpolate_chroma; /** Interpolation methods */
 } DeshakeContextExtra;
@@ -228,5 +229,9 @@ void dump_time_track(const TimeTrack *tt);
 /** Delete the time track and free memory allocated to it. */
 void delete_time_track(void);
 
-#define ADDTIME(label,fmt,...) add_time_marker(&deshake->extra,__FILE__,__func__,__LINE__,label,fmt, ##__VA_ARGS__)
+#  ifdef EXPER01
+#    define ADDTIME(label,fmt,...) add_time_marker(&deshake->extra,__FILE__,__func__,__LINE__,label,fmt, ##__VA_ARGS__)
+#  else
+#    define ADDTIME(label,fmt,...) do {}while(0)
+#  endif
 #endif

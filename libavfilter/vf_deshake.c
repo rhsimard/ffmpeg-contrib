@@ -66,12 +66,15 @@
 #include <time.h>
 static unsigned long fcount = 0;
 static unsigned long icount = 0;
+#  define LOGFILE (deshake->extra.logfile)
+#else
+#  define LOGFILE filename
 #endif
 
 /** name search area limits
  * Limits and default of user option for the search area
  * @{ */
-#define SEARCH_AREA_DEFAULT  "-1:-1:-1:-1"
+#define SEARCH_AREA_DEFAULT  "-1:-1:-1:-1" ///< not right here
 /** @} */
 /** @name rxry
  *  Limits and default of user option for the maximum extent of movement in x and y directions
@@ -108,7 +111,7 @@ static unsigned long icount = 0;
  *  @{*/
 #define ALPHA_DEFAULT      (-1.0)
 #define ALPHA_MAX          (0.99)
-#define ALPHA_MIN          (.001)
+#define ALPHA_MIN          (0.01)
 /** @}*/
 /** @name Interpolation methods.
  * @{ */
@@ -124,7 +127,11 @@ static unsigned long icount = 0;
 #define DIFF_LIMIT_MIN         (0)
 #define DIFF_LIMIT_MAX         (INT_MAX)
 /** @} */
-
+/** @name reference frames
+ * Number of reference frames to use in exponential average calculation
+ * @{ */
+#define REFERENCE_FRAMES_DEFAULT (20)
+/** @} */
 
 /** @name Macros to obtain the dimensions of the chroma planes
     @{*/
@@ -197,44 +204,57 @@ typedef struct {
  * See description above in defines for explanantions for
  * most of the items here. */
 typedef struct {
+#ifdef EXPER01
+    AVClass  *av_class;
+#else
     AVClass av_class;
-    AVFilterBufferRef *ref;    ///< Previous frame
-    AVCodecContext *avctx;
-    DSPContext c;              ///< Context providing optimized SAD methods
+#endif
+// In same order as option string; easier debugging that way.
+    int cx;
+    int cy;
+    int cw;                    ///< Crop motion search to this box
+    int ch;
     int rx;                    ///< Maximum horizontal shift
     int ry;                    ///< Maximum vertical shift
     enum FillMethod edge;      ///< Edge fill method
     int blocksize;             ///< Size of blocks to compare
     int contrast;              ///< Contrast threshold
     enum SearchMethod search;  ///< Motion search method
-    Transform avg, last;       ///< Transforms: running average and last frame
-    FILE *fp;                  ///< FILE pointer; non-null if user has requested the file in the options.
-    int cw;                    ///< Crop motion search to this box
-    int ch;
-    int cx;
-    int cy;
+// End of the standard user options.
+    int   reference_frames;    ///< Number of reference frames (defines averaging window)
 #ifdef EXPER01
     DeshakeContextExtra  extra;  ///< Extra stuff for development.
 #endif
+    FILE *fp;                  ///< FILE pointer; non-null if user has requested the file in the options.
+    Transform avg, last;       ///< Transforms: running average and last frame
+    AVFilterBufferRef *ref;    ///< Previous frame
+    AVCodecContext *avctx;
+    DSPContext c;              ///< Context providing optimized SAD methods
 }DeshakeContext;
 
 #if defined(EXPER01) && defined(USE_AVOPTION)
 #define OFFSET(x) offsetof(DeshakeContext, x)
+// Names chosen to match man page, except for multiple-option strings
   static const AVOption deshake_options[]= {
       {"opts"                     , "old-style option string"                           ,  OFFSET(extra.oldopts)            , AV_OPT_TYPE_STRING, {.str=NULL                       },  CHAR_MIN, CHAR_MAX             },
-      {"search-limits"            , "restrictions on search area"                       ,  OFFSET(extra.search_area)        , AV_OPT_TYPE_STRING, {.str=SEARCH_AREA_DEFAULT        },  CHAR_MIN, CHAR_MAX             },
-      {"search-extent-x"          , "extent of search on x axis"                        ,  OFFSET(rx)                       , AV_OPT_TYPE_INT,    {.dbl=RX_DEFAULT                 },  RX_MIN, RX_MAX                 },
-      {"search-extent-y"          , "extent of search on y axis"                        ,  OFFSET(ry)                       , AV_OPT_TYPE_INT,    {.dbl=RY_DEFAULT                 },  RY_MIN, RY_MAX                 },
+      {"cx"                       , "search area: left edge"                            ,  OFFSET(cx)                       , AV_OPT_TYPE_INT,    {     -1                         },  -1, INT_MAX                    },
+      {"cy"                       , "search area: top edge"                             ,  OFFSET(cy)                       , AV_OPT_TYPE_INT,    {     -1                         },  -1, INT_MAX                    },
+      {"cw"                       , "search area: width"                                ,  OFFSET(cw)                       , AV_OPT_TYPE_INT,    {     -1                         },  -1, INT_MAX                    },
+      {"ch"                       , "search area: height"                               ,  OFFSET(ch)                       , AV_OPT_TYPE_INT,    {     -1                         },  -1, INT_MAX                    },
+      {"rx"                       , "extent of search on x axis"                        ,  OFFSET(rx)                       , AV_OPT_TYPE_INT,    {.dbl=RX_DEFAULT                 },  RX_MIN, RX_MAX                 },
+      {"ry"                       , "extent of search on y axis"                        ,  OFFSET(ry)                       , AV_OPT_TYPE_INT,    {.dbl=RY_DEFAULT                 },  RY_MIN, RY_MAX                 },
       {"blocksize"                , "block size"                                        ,  OFFSET(blocksize)                , AV_OPT_TYPE_INT,    {.dbl=BLOCKSIZE_DEFAULT          },  BLOCKSIZE_MIN, BLOCKSIZE_MAX   },
       {"edge"                     , "edge style"                                        ,  OFFSET(edge)                     , AV_OPT_TYPE_INT,    {.dbl=FILL_DEFAULT               },  0, FILL_COUNT-1                },
       {"contrast"                 , "minimum contrast"                                  ,  OFFSET(contrast)                 , AV_OPT_TYPE_INT,    {.dbl=CONTRAST_DEFAULT           },  CONTRAST_MIN, CONTRAST_MAX     },
-      {"search-type"              , "search type"                                       ,  OFFSET(search)                   , AV_OPT_TYPE_INT,    {.dbl=SEARCH_DEFAULT             },  EXHAUSTIVE, SEARCH_COUNT-1     },
+      {"search"                   , "search type"                                       ,  OFFSET(search)                   , AV_OPT_TYPE_INT,    {.dbl=SEARCH_DEFAULT             },  EXHAUSTIVE, SEARCH_COUNT-1     },
       {"filename"                 , "optional log file"                                 ,  OFFSET(extra.logfile)            , AV_OPT_TYPE_STRING, {.str=NULL                       },  CHAR_MIN, CHAR_MAX             },
-      {"test: zoom"               , "option bitmask"                                    ,  OFFSET(extra.s_optmask)          , AV_OPT_TYPE_FLOAT,  {.dbl=1.0                        },  0.0, 1000000.0                 },
-      {"test: alpha"              , "substitute alpha for exponential average"          ,  OFFSET(extra.alpha)              , AV_OPT_TYPE_FLOAT,  {.dbl=ALPHA_DEFAULT              },  ALPHA_MIN, ALPHA_MAX           },
-      {"test: diff limit"         , "largest SAD diff to be considered valid"           ,  OFFSET(extra.diff_limit)         , AV_OPT_TYPE_INT,    {.dbl=DIFF_LIMIT_DEFAULT         },  DIFF_LIMIT_MIN, DIFF_LIMIT_MAX },
-      {"test: interpolate-luma"   , "interpolation method to use for luma plane"        ,  OFFSET(extra.interpolate_luma)   , AV_OPT_TYPE_INT,    {.dbl=INTERP_LUMA_DEFAULT        },  0, INTERPOLATE_COUNT -1        },
-      {"test: interpolate-chroma" , "interpolation method to use for chroma planes"     ,  OFFSET(extra.interpolate_chroma) , AV_OPT_TYPE_INT,    {.dbl=INTERP_CHROMA_DEFAULT      },  0, INTERPOLATE_COUNT -1        },
+      {"optmask"                  , "option bitmask"                                    ,  OFFSET(extra.s_optmask)          , AV_OPT_TYPE_STRING, {.str=NULL                       },  CHAR_MIN, CHAR_MAX             },
+      {"zoom"                     , "test zoom factor"                                  ,  OFFSET(extra.zoom)               , AV_OPT_TYPE_FLOAT,  {.dbl=1.0                        },  0.0, 1000000.0                 },
+      {"alpha"                    , "substitute alpha for exponential average"          ,  OFFSET(extra.alpha)              , AV_OPT_TYPE_FLOAT,  {.dbl=ALPHA_DEFAULT              },  -1.0, ALPHA_MAX                },
+      {"reference-frames"         , "reference frame count for computing exp. average"  ,  OFFSET(reference_frames)         , AV_OPT_TYPE_INT,    {.dbl=REFERENCE_FRAMES_DEFAULT   },  0, INT_MAX                     },
+      {"diff-limit"               , "largest SAD diff to be considered valid"           ,  OFFSET(extra.diff_limit)         , AV_OPT_TYPE_INT,    {.dbl=DIFF_LIMIT_DEFAULT         },  DIFF_LIMIT_MIN, DIFF_LIMIT_MAX },
+      {"interpolate-luma"         , "interpolation method to use for luma plane"        ,  OFFSET(extra.interpolate_luma)   , AV_OPT_TYPE_INT,    {.dbl=INTERP_LUMA_DEFAULT        },  0, INTERPOLATE_COUNT -1        },
+      {"interpolate-chroma"       , "interpolation method to use for chroma planes"     ,  OFFSET(extra.interpolate_chroma) , AV_OPT_TYPE_INT,    {.dbl=INTERP_CHROMA_DEFAULT      },  0, INTERPOLATE_COUNT -1        },
       {NULL}
   };
 #endif
@@ -264,7 +284,7 @@ static void draw_vectors_r(DeshakeContext *deshake, const ArrowAnnotation *root,
  * @see draw_vectors() */
 ArrowAnnotation *arrow_root = NULL;
 #else
-static int block_contrast(uint8_t *src, int x, int y, int stride, int blocksize, DeshakeContext);
+static int block_contrast(uint8_t *src, int x, int y, int stride, int blocksize);
 #endif
 
 static int cmp(const double *a, const double *b)
@@ -315,7 +335,7 @@ static double clean_mean(double *values, int count)
 #ifdef EXPER01
 static int block_contrast(uint8_t *src, int x, int y, int stride, int blocksize, DeshakeContext *deshake)
 #else
-static int block_contrast(uint8_t *src, int x, int y, int stride, int blocksize, DeshakeContext)
+static int block_contrast(uint8_t *src, int x, int y, int stride, int blocksize)
 #endif
 {
     int highest = 0;
@@ -456,11 +476,16 @@ static void find_block_motion(DeshakeContext *deshake, uint8_t *src1,
         }
     }
 
+    emms_c();  // Inform the CPU we're done doing MMX instructions.
+
+#ifdef EXPER01
+    if (smallest > deshake->extra.diff_limit) {
+#else
     if (smallest > 512) {
+#endif
         mv->x = -1;
         mv->y = -1;
     }
-    emms_c();
 #ifdef EXPER01
     if (OPTMASK(OPT_LOG_FIND_BLOCK_MOTION_FINAL)) {
         av_log(NULL, AV_LOG_ERROR, "%s %d: Final: smallest =%4d  mv->x =%4d  mv->y =%4d\n", __func__, __LINE__, smallest, mv->x, mv->y);
@@ -537,9 +562,11 @@ static void find_motion(DeshakeContext *deshake, uint8_t *src1, uint8_t *src2,
                         count_max_value = n;
                         t->vector.x = mv.x;
                         t->vector.y = mv.y;
+#ifdef EXPER01
                         DESHAKE_WINNING_COUNT = count_max_value;
                         DESHAKE_WINNING_MV.x = mv.x;
                         DESHAKE_WINNING_MV.y = mv.y;
+#endif
                     }
                     if (x > deshake->rx && y > deshake->ry) {
                         angles[pos++] = block_angle(x, y, 0, 0, &mv);
@@ -547,7 +574,7 @@ static void find_motion(DeshakeContext *deshake, uint8_t *src1, uint8_t *src2,
                     center_x += mv.x;
                     center_y += mv.y;
 #ifdef EXPER01
-#define VECTOR_MIN (3)
+#define VECTOR_MIN (1)
                     if (OPTMASK(OPT_BLOCK_VECTORS)) {
                         static int fuss=10;
                         if (mv.x >= VECTOR_MIN || mv.y >= VECTOR_MIN){
@@ -556,7 +583,7 @@ static void find_motion(DeshakeContext *deshake, uint8_t *src1, uint8_t *src2,
                                 arrow->startx = x + deshake->blocksize/2;
                                 arrow->starty = y + deshake->blocksize/2;
                                 if (OPTMASK(OPT_BLOCK_VECTORS_NORMALIZE)) {
-                                    arrow->endx = arrow->startx + (int)((float)mv.x * 8.0/deshake->rx); //+ deshake->rx; // Normalize for better visiblity.
+                                    arrow->endx = arrow->startx + (int)((float)mv.x * 8.0/deshake->rx);
                                     arrow->endy = arrow->starty + (int)((float)mv.y * 8.0/deshake->ry);
                                     fx = (float)arrow->endx/(x + (float)mv.x + deshake->rx);
                                     fy = (float)arrow->endy/(y + (float)mv.y + deshake->ry);
@@ -683,12 +710,12 @@ static void end_frame(AVFilterLink *link)
     ADDTIME("entry","\n");
     src1  = (deshake->ref == NULL) ? in->data[0] : deshake->ref->data[0];
     src2  = in->data[0];
-    alpha = (DESHAKE_ALPHA > 0)? DESHAKE_ALPHA : (deshake->extra.reference_frames)? 2.0 / deshake->extra.reference_frames : 0.5;
+#ifdef EXPER01
+    alpha = (DESHAKE_ALPHA > 0)? DESHAKE_ALPHA : (deshake->reference_frames)? 2.0 / deshake->reference_frames : 0.5;
+#else
+    alpha = 2.0 / deshake->reference_frames;
+#endif
 
-    if (!fuss) {
-        av_log(deshake,AV_LOG_DEBUG,"%s %d: alpha =%4.2f  reference_frames = %d  deshake->ref =%p\n", __func__,__LINE__,alpha,deshake->extra.reference_frames, deshake->ref);
-        fuss++;
-    }
     if (deshake->cx < 0 || deshake->cy < 0 || deshake->cw < 0 || deshake->ch < 0) {
         // Find the most likely global motion for the current frame
         find_motion(deshake, src1, in->data[0], link->w, link->h, in->linesize[0], &t);
@@ -740,11 +767,15 @@ static void end_frame(AVFilterLink *link)
 
     // Write statistics to file if requested.
     if (deshake->fp) {
+#ifdef EXPER01
         statmsg = av_asprintf("%8lu: %6.2f  %6.2f  %6.2f    %6.2f  %6.2f  %6.2f    %6.2f  %6.2f  %6.2f    %6.2f  %6.2f  %6.2f\n", \
                               fcount, orig.vector.x, orig.vector.y, deshake->avg.vector.x, deshake->avg.vector.y, t.vector.x, t.vector.y, orig.angle, deshake->avg.angle, t.angle, orig.zoom, deshake->avg.zoom, t.zoom);
         fwrite(statmsg, sizeof(char), strlen(statmsg), deshake->fp);
-#ifdef EXPER01
         fflush(deshake->fp);
+#else
+        statmsg = av_asprintf("          %6.2f  %6.2f  %6.2f    %6.2f  %6.2f  %6.2f    %6.2f  %6.2f  %6.2f    %6.2f  %6.2f  %6.2f\n", \
+                              orig.vector.x, orig.vector.y, deshake->avg.vector.x, deshake->avg.vector.y, t.vector.x, t.vector.y, orig.angle, deshake->avg.angle, t.angle, orig.zoom, deshake->avg.zoom, t.zoom);
+        fwrite(statmsg, sizeof(char), strlen(statmsg), deshake->fp);
 #endif
         av_free(statmsg);
     }
@@ -766,7 +797,7 @@ static void end_frame(AVFilterLink *link)
     ADDTIME("before luma transform","\n");
     avfilter_transform(src2, out->data[0], in->linesize[0], out->linesize[0], link->w, link->h, matrix, 0, INTERPOLATE_METHOD_LUMA, deshake->edge, &deshake->extra);
 #else
-    avfilter_transform(src2, out->data[0], in->linesize[0], out->linesize[0], link->w, link->h, matrix, 0, INTERPOLATE_METHOD_LUMA, deshake->edge);
+    avfilter_transform(src2, out->data[0], in->linesize[0], out->linesize[0], link->w, link->h, matrix, 0, INTERPOLATE_BILINEAR, deshake->edge);
 #endif
     // Generate a chroma transformation matrix
     avfilter_get_matrix(t.vector.x / (link->w / CHROMA_WIDTH(link)), t.vector.y / (link->h / CHROMA_HEIGHT(link)), t.angle, 1.0 + t.zoom / 100.0, matrix);
@@ -778,8 +809,8 @@ static void end_frame(AVFilterLink *link)
     ADDTIME("before chroma transform","2");
     avfilter_transform(in->data[2], out->data[2], in->linesize[2], out->linesize[2], CHROMA_WIDTH(link), CHROMA_HEIGHT(link), matrix, 127, INTERPOLATE_METHOD_CHROMA, deshake->edge, &deshake->extra);
 #else
-    avfilter_transform(in->data[1], out->data[1], in->linesize[1], out->linesize[1], CHROMA_WIDTH(link), CHROMA_HEIGHT(link), matrix, 127, INTERPOLATE_METHOD_CHROMA, deshake->edge);
-    avfilter_transform(in->data[2], out->data[2], in->linesize[2], out->linesize[2], CHROMA_WIDTH(link), CHROMA_HEIGHT(link), matrix, 127, INTERPOLATE_METHOD_CHROMA, deshake->edge);
+    avfilter_transform(in->data[1], out->data[1], in->linesize[1], out->linesize[1], CHROMA_WIDTH(link), CHROMA_HEIGHT(link), matrix, 127, INTERPOLATE_BILINEAR, deshake->edge);
+    avfilter_transform(in->data[2], out->data[2], in->linesize[2], out->linesize[2], CHROMA_WIDTH(link), CHROMA_HEIGHT(link), matrix, 127, INTERPOLATE_BILINEAR, deshake->edge);
 #endif
 
 #ifdef EXPER01
@@ -831,6 +862,8 @@ static void end_frame(AVFilterLink *link)
 }
 /** @}*/
 
+#ifdef EXPER01
+
 /** @name Special development-support functions
  *
  * Generally intended for testing and development, but some may also find it useful, or at least entertaining.
@@ -876,7 +909,6 @@ static void draw_vectors(DeshakeContext *deshake, AVFilterBufferRef *avbuf, int 
 #define ORIG_Y (final_vector_params[1][1])
 #define T_X (final_vector_params[2][0])
 #define T_Y (final_vector_params[2][1])
-
 
     if (OPTMASK(OPT_BLOCK_VECTORS)) {
         if (DESHAKE_WINNING_COUNT) { // Do this first.
@@ -936,6 +968,8 @@ static void draw_vectors_r(DeshakeContext *deshake, const ArrowAnnotation *root,
 }
 /** @}*/
 
+#endif  /* ifdef EXPER01 */
+
 
 /** @name Setup and initialization
  * @{*/
@@ -951,78 +985,110 @@ static void draw_vectors_r(DeshakeContext *deshake, const ArrowAnnotation *root,
  */
 static av_cold int init(AVFilterContext *ctx, const char *args, void *opaque)
 {
+#define INIT_DEFAULTS(dummy)                    \
+    do {                                        \
+        deshake->rx = RX_DEFAULT;               \
+        deshake->ry = RY_DEFAULT;               \
+        deshake->edge = FILL_DEFAULT;           \
+        deshake->blocksize = BLOCKSIZE_DEFAULT; \
+        deshake->contrast = CONTRAST_DEFAULT;   \
+        deshake->search = SEARCH_DEFAULT;       \
+        deshake->cw = -1;                       \
+        deshake->ch = -1;                       \
+        deshake->cx = -1;                       \
+        deshake->cy = -1;                       \
+    }while(0)
+
+#define INIT_EXPER01_DEFAULTS(dummy)                           \
+    do {                                                       \
+        deshake->extra.alpha = ALPHA_DEFAULT;                  \
+        INTERPOLATE_METHOD_LUMA   = INTERP_LUMA_DEFAULT;       \
+        INTERPOLATE_METHOD_CHROMA = INTERP_CHROMA_DEFAULT;     \
+        deshake->reference_frames = REFERENCE_FRAMES_DEFAULT;  \
+        deshake->extra.logfile    = filename;                  \
+    }while(0)
+
     DeshakeContext *deshake = ctx->priv;
     char *statmsg;
-    const char *argstring = args;
+    const char *argstring=args;
+    char filename[PATH_MAX] = {0};
+
 #ifdef EXPER01
     u_int32_t *p_32_01, *p_32_02, *p_32_03;
     int i, nopts = 0;
     OptmaskSelection *osp;
-#endif
-#if defined(EXPER01) && defined(USE_AVOPTION)
+
+#  ifdef USE_AVOPTION
     int err;
-    deshake->av_class = deshake_class;
+
+    deshake->av_class = &deshake_class;
     av_opt_set_defaults(deshake);
 
-    if ((err = (av_set_options_string(deshake, args, "=", ":"))) < 0) {
-        av_log(ctx, AV_LOG_ERROR, "Error parsing options string: '%s'\n", args);
-        return err;
+    if (strncmp(args,"opts=",5)) {
+        argstring = NULL;
+        if ((err = (av_set_options_string(deshake, args, "=", ":"))) < 0) {
+            av_log(ctx, AV_LOG_ERROR, "Error parsing options string: '%s'\n", args);
+            return err;
+        }
+        deshake->extra.optmask = strtoull(deshake->extra.s_optmask,NULL,0);
+        if (deshake->extra.search_area){
+            sscanf(deshake->extra.search_area, "%d:%d:%d:%d",
+                   &deshake->cx, &deshake->cy, &deshake->cw, &deshake->ch);
+        }
+    } else {
+        argstring = args+5;
     }
-    argstring = deshake->extra.oldopts;
-#else
-    char filename[256] = {0};
-    deshake->rx = RX_DEFAULT;
-    deshake->ry = RY_DEFAULT;
-    deshake->edge = FILL_DEFAULT;
-    deshake->blocksize = BLOCKSIZE_DEFAULT;
-    deshake->contrast = CONTRAST_DEFAULT;
-    deshake->search = SEARCH_DEFAULT;
-    INTERPOLATE_METHOD_LUMA   = INTERP_LUMA_DEFAULT;
-    INTERPOLATE_METHOD_CHROMA = INTERP_CHROMA_DEFAULT;
-    deshake->extra.reference_frames = 20;
+#  else /* ifdef USE_AVOPTION */
 
-    deshake->cw = -1;
-    deshake->ch = -1;
-    deshake->cx = -1;
-    deshake->cy = -1;
-#endif
+    INIT_DEFAULTS();
+    INIT_EXPER01_DEFAULTS();
 
-#ifdef EXPER01
+#  endif  /* ifdef USE_AVOPTION */
+
     icount++;
-    memset(&deshake->extra,0,sizeof(deshake->extra));
-    deshake->extra.alpha = ALPHA_DEFAULT;
-#endif
 
-    if (args) {
+#else  /* ifdef EXPER01 */
+
+    char filename[PATH_MAX] = {0};
+    INIT_DEFAULTS();
+
+#endif    /* if(n)def EXPER01 */
+
+    if (argstring && *argstring) {
 #ifdef EXPER01
-        sscanf(args, "%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%f:%Li:%f:%255s",
+        int nconv;
+        nconv = sscanf(argstring, "%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%f:%Li:%f:%255s",
                &deshake->cx, &deshake->cy, &deshake->cw, &deshake->ch,
                &deshake->rx, &deshake->ry, (int *)&deshake->edge,
-               &deshake->blocksize, &deshake->contrast, (int *)&deshake->search, &DESHAKE_ZOOM, (long long int*)&deshake->extra.optmask, &DESHAKE_ALPHA, deshake->extra.logfile);
+               &deshake->blocksize, &deshake->contrast, (int *)&deshake->search, &DESHAKE_ZOOM, (long long int*)&deshake->extra.optmask, &DESHAKE_ALPHA, filename);
         if (DESHAKE_ALPHA >= 0) {
             DESHAKE_ALPHA = av_clipf(DESHAKE_ALPHA,0.01,0.99);
         }
         global_option_01 = OPTMASK(OPT_GLOBAL_01);
         global_option_02 = OPTMASK(OPT_GLOBAL_02);
+#  ifdef USE_AVOPTION
+        // System will run av_free on all string and binary elements of the context.
+        av_assert0(LOGFILE==NULL);
+        if (LOGFILE == NULL) {
+            LOGFILE = av_strdup(filename);
+        }
+#  endif
 #else
-        sscanf(args, "%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%255s",
-               &deshake->cx, &deshake->cy, &deshake->cw, &deshake->ch,
-               &deshake->rx, &deshake->ry, (int *)&deshake->edge,
-               &deshake->blocksize, &deshake->contrast, (int *)&deshake->search, deshake->extra.logfile);
+    sscanf(argstring, "%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%255s",
+           &deshake->cx, &deshake->cy, &deshake->cw, &deshake->ch,
+           &deshake->rx, &deshake->ry, (int *)&deshake->edge,
+           &deshake->blocksize, &deshake->contrast, (int *)&deshake->search, filename);
+    deshake->blocksize = av_clip(deshake->blocksize, BLOCKSIZE_MIN, BLOCKSIZE_MAX);
+    deshake->rx = av_clip(deshake->rx, RX_MIN, RX_MAX);
+    deshake->ry = av_clip(deshake->ry, RY_MIN, RY_MAX);
+    deshake->edge = av_clip(deshake->edge, FILL_BLANK, FILL_COUNT - 1);
+    deshake->contrast = av_clip(deshake->contrast, CONTRAST_MIN, CONTRAST_MAX);
+    deshake->search = av_clip(deshake->search, EXHAUSTIVE, SEARCH_COUNT - 1);
 #endif
-
-        deshake->blocksize = av_clip(deshake->blocksize, BLOCKSIZE_MIN, BLOCKSIZE_MAX);
-        deshake->blocksize /= 2;
-        deshake->rx = av_clip(deshake->rx, RX_MIN, RX_MAX);
-        deshake->ry = av_clip(deshake->ry, RY_MIN, RY_MAX);
-        deshake->edge = av_clip(deshake->edge, FILL_BLANK, FILL_COUNT - 1);
-        deshake->contrast = av_clip(deshake->contrast, CONTRAST_MIN, CONTRAST_MAX);
-        deshake->search = av_clip(deshake->search, EXHAUSTIVE, SEARCH_COUNT - 1);
-        T_SET(deshake->avg, =, 0);
-
     }
-    if (*deshake->extra.logfile) {
-        if ((deshake->fp = fopen(deshake->extra.logfile, "w")) != NULL) {
+    deshake->blocksize /= 2;
+    if (LOGFILE && *LOGFILE) {
+        if ((deshake->fp = fopen(LOGFILE, "w")) != NULL) {
             statmsg = av_asprintf("          %7s %7s %7s   %7s %7s %7s   %7s %7s %7s   %7s %7s %7s\n\n",
                                   "Or x", "Or y", "Av x", "Av y", "Fin x", "Fin y", "Or ang", "Av ang", "Fin ang", "Or zm", "Av zm", "Fin zm");
             fwrite(statmsg, sizeof(char), strlen(statmsg), deshake->fp);
@@ -1031,7 +1097,7 @@ static av_cold int init(AVFilterContext *ctx, const char *args, void *opaque)
 #endif
             av_free(statmsg);
         } else {
-            av_log(deshake,AV_LOG_ERROR,"Failed to open stat file %s: %s\n", deshake->extra.logfile, strerror(errno));
+            av_log(deshake,AV_LOG_ERROR,"Failed to open stat file %s: %s\n", LOGFILE, strerror(errno));
         }
     }
 
@@ -1047,7 +1113,8 @@ static av_cold int init(AVFilterContext *ctx, const char *args, void *opaque)
     av_log(ctx, AV_LOG_INFO, "cx: %d, cy: %d, cw: %d, ch: %d, rx: %d, ry: %d, edge: %d blocksize: %d contrast: %d search: %d  zoom: %f  option mask: 0x%08lx %08lx  alpha: %f%s%s\n",
            deshake->cx, deshake->cy, deshake->cw, deshake->ch,
            deshake->rx, deshake->ry, deshake->edge, deshake->blocksize * 2, deshake->contrast, deshake->search, DESHAKE_ZOOM,
-           (unsigned long)p_32_01[1], (unsigned long)p_32_01[0], DESHAKE_ALPHA, (*deshake->extra.logfile? "  log file: " : " oh "), (*deshake->extra.logfile? deshake->extra.logfile : " no "));
+           (unsigned long)p_32_01[1], (unsigned long)p_32_01[0], DESHAKE_ALPHA,
+           (deshake->extra.logfile && *deshake->extra.logfile? "  log file: " : " oh "), (deshake->extra.logfile && *deshake->extra.logfile? deshake->extra.logfile : " no "));
     if (deshake->extra.optmask) {
         av_log(ctx,AV_LOG_VERBOSE,"Enabled deshake options: ");
         for (i = 0 ; i < get_n_optmask_selections() ; i++) {
@@ -1062,7 +1129,7 @@ static av_cold int init(AVFilterContext *ctx, const char *args, void *opaque)
 #else
     av_log(ctx, AV_LOG_INFO, "cx: %d, cy: %d, cw: %d, ch: %d, rx: %d, ry: %d, edge: %d blocksize: %d contrast: %d search: %d  %s\n",
            deshake->cx, deshake->cy, deshake->cw, deshake->ch,
-           deshake->rx, deshake->ry, deshake->edge, deshake->blocksize * 2, deshake->contrast, deshake->search, (*deshake->extra.logfile? deshake->extra.logfile : ""));
+           deshake->rx, deshake->ry, deshake->edge, deshake->blocksize * 2, deshake->contrast, deshake->search, (*LOGFILE? LOGFILE : ""));
 #endif
 
     return 0;

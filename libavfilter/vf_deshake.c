@@ -398,7 +398,7 @@ static double block_angle(int x, int y, int cx, int cy, IntMotionVector *shift)
  * areas which have moved.
  *
  * @param deshake Instance description
- * @param src1,src2 data for the frames frame (luma plane)
+ * @param src1,src2 Data for the frames frame (luma plane)
  * @param bx, by Location of the block
  * @param stride Size of the data for one line within the data buffers
  * @param mv Motion vector struct to receive the results.
@@ -1112,10 +1112,10 @@ static av_cold int init(AVFilterContext *ctx, const char *args, void *opaque)
 
 #ifdef EXPER01
     p_32_01 = (u_int32_t*)&deshake->extra.optmask;
-    av_log(ctx, AV_LOG_INFO, "cx: %d, cy: %d, cw: %d, ch: %d, rx: %d, ry: %d, edge: %d blocksize: %d contrast: %d search: %d  zoom: %f  option mask: 0x%08lx %08lx  alpha: %f%s%s\n",
+    av_log(ctx, AV_LOG_INFO, "cx: %d, cy: %d, cw: %d, ch: %d, rx: %d, ry: %d, edge: %d blocksize: %d contrast: %d search: %d  zoom: %f  option mask: 0x%08lx %08lx  alpha: %f  ref frames: %d  diff-limit: %d  interp: %d,%d%s%s\n",
            deshake->cx, deshake->cy, deshake->cw, deshake->ch,
            deshake->rx, deshake->ry, deshake->edge, deshake->blocksize * 2, deshake->contrast, deshake->search, DESHAKE_ZOOM,
-           (unsigned long)p_32_01[1], (unsigned long)p_32_01[0], DESHAKE_ALPHA,
+           (unsigned long)p_32_01[1], (unsigned long)p_32_01[0], DESHAKE_ALPHA, deshake->reference_frames, deshake->extra.diff_limit, deshake->extra.interpolate_luma, deshake->extra.interpolate_chroma,
            (deshake->extra.logfile && *deshake->extra.logfile? "  log file: " : " oh "), (deshake->extra.logfile && *deshake->extra.logfile? deshake->extra.logfile : " no "));
     if (deshake->extra.optmask) {
         av_log(ctx,AV_LOG_VERBOSE,"Enabled deshake options: ");

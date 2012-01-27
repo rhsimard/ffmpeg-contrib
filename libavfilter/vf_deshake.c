@@ -80,7 +80,7 @@ static unsigned long icount = 0;
  *  Limits and default of user option for the maximum extent of movement in x and y directions
  *  @{*/
 #define RX_DEFAULT         (16)
-#define RX_MAX             (64)
+#define RX_MAX             (63)
 #define RX_MIN             (0)
 #define RY_DEFAULT         (16)
 #define RY_MAX             (64)
@@ -1032,7 +1032,7 @@ static av_cold int init(AVFilterContext *ctx, const char *args, void *opaque)
             av_log(ctx, AV_LOG_ERROR, "Error parsing options string: '%s'\n", args);
             return err;
         }
-        deshake->extra.optmask = strtoull(deshake->extra.s_optmask,NULL,0);
+        deshake->extra.optmask = (deshake->extra.s_optmask ? strtoull(deshake->extra.s_optmask,NULL,0) : 0);
         if (deshake->extra.search_area){
             sscanf(deshake->extra.search_area, "%d:%d:%d:%d",
                    &deshake->cx, &deshake->cy, &deshake->cw, &deshake->ch);

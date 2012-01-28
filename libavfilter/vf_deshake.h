@@ -87,23 +87,19 @@ enum SearchMethod {
     SEARCH_COUNT
 };
 
-#if 0  // Moved to exper01.h for now.
-typedef struct {
-    int x;             ///< Horizontal shift
-    int y;             ///< Vertical shift
-} IntMotionVector;
-#endif
-
 /** Description of a particular displacement.
- * @note There is an identical struct but with
- * integer members, IntMotionVector, normally here but
- * currently temporarily relocated to
- * exper01.h for test and development work.
- */
+ *  Versions for integer and double types  */
 typedef struct {
     double x;             ///< Horizontal shift
     double y;             ///< Vertical shift
 } MotionVector;
+
+/* Temporarily in exper01.h
+typedef struct {
+    int x;             ///< Horizontal shift
+    int y;             ///< Vertical shift
+} IntMotionVector;
+*/
 
 /** Description of a transform.
  *
@@ -174,7 +170,8 @@ typedef struct {
 }DeshakeContext;
 
 #ifdef EXPER01
-void draw_vectors(DeshakeContext *deshake, AVFilterBufferRef *avbuf, int w, int h, int stride, Transform *t, Transform *orig, int normalizing_scale, int color, int highlight_color);
+//void draw_vectors(DeshakeContext *deshake, AVFilterBufferRef *avbuf, int w, int h, int stride, Transform *t, Transform *orig, int normalizing_scale, int color, int highlight_color);
+void do_vectors(DeshakeContext *deshake, AVFilterLink *link, Transform *t, Transform *orig);
 void find_motion_generate_block_vectors(DeshakeContext *deshake, int x, int y, int (*counts)[BLOCKSIZE_MAX], IntMotionVector *mv);
 int block_contrast(uint8_t *src, int x, int y, int stride, int blocksize, DeshakeContext *deshake);
 /** Root of linked list of vector arrows to draw.

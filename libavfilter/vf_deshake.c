@@ -59,8 +59,6 @@
 #include "libavutil/colorspace.h"
 #include "libavutil/opt.h"
 
-////////// HELLO
-
 #include "transform.h"
 #include "libavutil/exper01.h"     // EXPER01
 #include "libavfilter/vf_deshake.h"
@@ -81,6 +79,7 @@
       {"contrast"      , "minimum contrast"             , OFFSET(contrast)                , AV_OPT_TYPE_INT,    {.dbl=CONTRAST_DEFAULT         },  CONTRAST_MIN, CONTRAST_MAX     },
       {"search"        , "search type"                  , OFFSET(search)                  , AV_OPT_TYPE_INT,    {.dbl=SEARCH_DEFAULT           },  EXHAUSTIVE, SEARCH_COUNT-1     },
       {"filename"      , "optional log file"            , OFFSET(extra.logfile)           , AV_OPT_TYPE_STRING, {.str=NULL                     },  CHAR_MIN, CHAR_MAX             },
+      /* The following are newly-added items for test. */
       {"optmask"       , "option bitmask"               , OFFSET(extra.s_optmask)         , AV_OPT_TYPE_STRING, {.str=NULL                     },  CHAR_MIN, CHAR_MAX             },
       {"zoom"          , "test zoom factor"             , OFFSET(extra.zoom)              , AV_OPT_TYPE_FLOAT,  {.dbl=1.0                      },  0.0, 1000000.0                 },
       {"alpha"         , "subst. alpha for exp. avg."   , OFFSET(extra.alpha)             , AV_OPT_TYPE_FLOAT,  {.dbl=ALPHA_DEFAULT            },  -1.0, ALPHA_MAX                },
@@ -390,6 +389,7 @@ static void find_motion(DeshakeContext *deshake, uint8_t *src1, uint8_t *src2,
                     center_x += mv.x;
                     center_y += mv.y;
 #ifdef EXPER01
+                    find_motion_generate_block_vectors(deshake, x, y, counts, &mv);
 #endif
                 }
             }
@@ -465,7 +465,6 @@ static void end_frame(AVFilterLink *link)
     char *statmsg;
 
 #ifdef EXPER01
-    int x, y;
     MotionVector start, end;  // For arrows.
     u_int32_t  *p_32_01, *p_32_02, *p_32_03;
     static int fuss = 0;
@@ -585,29 +584,7 @@ static void end_frame(AVFilterLink *link)
 #endif
 
 #ifdef EXPER01
-    {
-        int arrow_color = 224;
-        int highlight_color = 255;
-        if (OPTMASK(OPT_BLANK_FRAME)) {
-            // Put the conversion macros here for convenience; someone will want to use them someday, no doubt.
-            int yp = RGB_TO_Y_CCIR(0, 0, 0);
-            int u = RGB_TO_U_CCIR(0, 0, 0, 0);
-            int v = RGB_TO_V_CCIR(0, 0, 0, 0);
-            for (y = 0 ; y < CHROMA_HEIGHT(link) ; y++) {
-                for (x = 0 ; x < CHROMA_WIDTH(link) ; x++) {
-                    out->data[1][y * out->linesize[1] + x] = u;
-                    out->data[2][y * out->linesize[2] + x] = v;
-                }
-            }
-            for (y = 0 ; y < link->h ; y++) {
-                for (x = 0 ; x < link->w ; x++) {
-                    out->data[0][y * out->linesize[0] + x] = yp;
-                }
-            }
-            arrow_color = highlight_color = 255;
-        }
-        draw_vectors(deshake, out, link->w, link->h, out->linesize[0], &t, &orig, FFMAX(16/deshake->rx,1), arrow_color, highlight_color);
-    }
+    do_vectors(deshake, link, &t, &orig);
 #endif
     ADDTIME("final processing","\n");
 

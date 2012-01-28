@@ -24,6 +24,9 @@
 
 ArrowAnnotation *arrow_root = NULL;
 static void draw_vectors_r(DeshakeContext *deshake, const ArrowAnnotation *root, AVFilterBufferRef *avbuf, int w, int h, int stride, int normalizing_scale, int color, int highlight_color);
+static void draw_vectors(DeshakeContext *deshake, AVFilterBufferRef *avbuf, int w, int h, int stride, Transform *t, Transform *orig, int normalizing_scale, int color, int highlight_color);
+unsigned long fcount = 0;
+unsigned long icount = 0;
 
 
 /** Generate the vector list for later display
@@ -34,25 +37,36 @@ void find_motion_generate_block_vectors(DeshakeContext *deshake, int x, int y, i
 #define VECTOR_MIN (1)
      int arrow_index;
      ArrowAnnotation *arrow, **a2;
+
      if (OPTMASK(OPT_BLOCK_VECTORS)) {
           static int fuss=10;
           if (mv->x >= VECTOR_MIN || mv->y >= VECTOR_MIN){
                if ((arrow = av_malloc(sizeof(ArrowAnnotation)))) {
-                    float fx = 1.0, fy = 1.0;
+                    //float fx = 1.0, fy = 1.0;
                     arrow->startx = x + deshake->blocksize/2;
                     arrow->starty = y + deshake->blocksize/2;
                     if (OPTMASK(OPT_BLOCK_VECTORS_NORMALIZE)) {
-                         arrow->endx = arrow->startx + (int)((float)mv->x * 8.0/deshake->rx);
-                         arrow->endy = arrow->starty + (int)((float)mv->y * 8.0/deshake->ry);
-                         fx = (float)arrow->endx/(x + (float)mv->x + deshake->rx);
-                         fy = (float)arrow->endy/(y + (float)mv->y + deshake->ry);
+                         MotionVector tmv = { (double)mv->x, (double)mv->y};
+                         double n;
+                         if ((n = FFMIN(FFABS(tmv.x), FFABS(tmv.y))) < 8) {
+                              tmv.x *= 8/n;
+                              tmv.y *= 8/n;
+                         }
+                         if ((n = FFMAX(FFABS(tmv.x),FFABS(tmv.y))) > deshake->blocksize -4) {
+                              tmv.x *= (deshake->blocksize-4)/n;
+                              tmv.y *= (deshake->blocksize-4)/n;
+                         }
+                         arrow->endx = arrow->startx + (int)tmv.x;
+                         arrow->endy = arrow->starty + (int)tmv.y;
+                         //fx = (float)arrow->endx/(x + (float)mv->x + deshake->rx);
+                         //fy = (float)arrow->endy/(y + (float)mv->y + deshake->ry);
                     } else {
                          arrow->endx = arrow->startx + mv->x;
                          arrow->endy = arrow->starty + mv->y;
                     }
                     if (fuss && (mv->x || mv->y)) {
 //                                   av_log(deshake,AV_LOG_ERROR,"%s %d: fx=%f, fy=%f, x=%d, mv->x=%d, deshake->rx=%d, startx=%d,  endx=%d, y=%d, mv->y=%d, deshake->ry=%d, starty=%d, endy=%d\n",
-//                                          __func__,__LINE__, fx, fy, x, mv->x, deshake->rx, arrow->startx, arrow->endx, y, mv->y, deshake->ry, arrow->starty, arrow->endy);
+//                                          __func__,__LINE__, 0, 0, x, mv->x, deshake->rx, arrow->startx, arrow->endx, y, mv->y, deshake->ry, arrow->starty, arrow->endy);
                          fuss--;
                     }
                     arrow->count = counts[mv->x + deshake->rx][mv->y + deshake->ry];
@@ -80,6 +94,36 @@ void find_motion_generate_block_vectors(DeshakeContext *deshake, int x, int y, i
      }
 }
 
+
+void do_vectors(DeshakeContext *deshake, AVFilterLink *link, Transform *t, Transform *orig)
+{
+    AVFilterBufferRef *in  = link->cur_buf;
+    AVFilterBufferRef *out = link->dst->outputs[0]->out_buf;
+
+    int x, y;
+    int arrow_color = 224;
+    int highlight_color = 255;
+    if (OPTMASK(OPT_BLANK_FRAME)) {
+         // Put the conversion macros here for convenience; someone will want to use them someday, no doubt.
+         int yp = RGB_TO_Y_CCIR(0, 0, 0);
+         int u = RGB_TO_U_CCIR(0, 0, 0, 0);
+         int v = RGB_TO_V_CCIR(0, 0, 0, 0);
+         for (y = 0 ; y < CHROMA_HEIGHT(link) ; y++) {
+              for (x = 0 ; x < CHROMA_WIDTH(link) ; x++) {
+                   out->data[1][y * out->linesize[1] + x] = u;
+                   out->data[2][y * out->linesize[2] + x] = v;
+              }
+         }
+         for (y = 0 ; y < link->h ; y++) {
+              for (x = 0 ; x < link->w ; x++) {
+                   out->data[0][y * out->linesize[0] + x] = yp;
+              }
+         }
+         arrow_color = highlight_color = 255;
+    }
+    draw_vectors(deshake, out, link->w, link->h, out->linesize[0], t, orig, FFMAX(16/deshake->rx,1), arrow_color, highlight_color);
+}
+
 /** Draw (optionally) per-block and final vectors; Part of test/development code.
  *
  * Draw vectors over the output video to indicate what movement has been detected by the
@@ -105,7 +149,7 @@ void find_motion_generate_block_vectors(DeshakeContext *deshake, int x, int y, i
  * @param highlight_color An alternative used to set a particular item apart from the others.
  * @note When blanking the frame is enabled, both regular and hightlight colors are set to max (255).
  */
-void draw_vectors(DeshakeContext *deshake, AVFilterBufferRef *avbuf, int w, int h, int stride, Transform *t, Transform *orig, int normalizing_scale, int color, int highlight_color)
+static void draw_vectors(DeshakeContext *deshake, AVFilterBufferRef *avbuf, int w, int h, int stride, Transform *t, Transform *orig, int normalizing_scale, int color, int highlight_color)
 {
           int i, j, final_vector_params[][2] = {
                { deshake->avg.vector.x,  deshake->avg.vector.y  },
@@ -167,6 +211,10 @@ void draw_vectors(DeshakeContext *deshake, AVFilterBufferRef *avbuf, int w, int 
 /** Recursive element for vector drawing */
 static void draw_vectors_r(DeshakeContext *deshake, const ArrowAnnotation *root, AVFilterBufferRef *avbuf, int w, int h, int stride, int normalizing_scale, int color, int highlight_color)
      {
+          if (OPTMASK(OPT_FLOAT_01)) {
+               av_log(deshake,AV_LOG_ERROR,"%s %d: deshake: %p arrow_root startx: %d  starty: %d   avbuf: %p  w: %d h: %d stride: %d: scale: %d  color: %d  highlight color: %d\n",
+                      __func__, __LINE__, deshake, (root? root->startx : -1), (root? root->starty : -1), avbuf, w, h, stride, normalizing_scale, color, highlight_color);
+          }
           if (root)
           {
                if (DESHAKE_WINNING_MV.x == root->startx && DESHAKE_WINNING_MV.y == root->starty) {

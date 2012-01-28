@@ -1,0 +1,3 @@
+[submodule "ffmpeg/ffmpeg"]
+	path = ffmpeg/ffmpeg
+	url = git@github.com:rhsimard/ffmpeg-contrib.git

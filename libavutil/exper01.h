@@ -154,8 +154,6 @@ typedef struct s_arrow {
     struct s_arrow *next;
 }ArrowAnnotation;
 
-extern ArrowAnnotation *arrow_root;
-
 /**
  * Print the list of available switch options.
  *

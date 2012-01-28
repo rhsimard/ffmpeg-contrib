@@ -20,7 +20,8 @@ OBJS = allfilters.o                                                     \
        formats.o                                                        \
        graphparser.o                                                    \
        transform.o                                                      \
-       vsrc_buffer.o
+       vsrc_buffer.o                                                    \
+       vf_deshake-dev.o
 
 OBJS-$(CONFIG_AVCODEC)                       += avcodec.o
 

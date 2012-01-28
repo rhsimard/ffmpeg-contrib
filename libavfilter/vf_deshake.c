@@ -458,8 +458,7 @@ static void end_frame(AVFilterLink *link)
     DeshakeContext *deshake = link->dst->priv;
     AVFilterBufferRef *in  = link->cur_buf;
     AVFilterBufferRef *out = link->dst->outputs[0]->out_buf;
-//    int width, height, src_stride, dst_stride, chroma_width, chroma_height;
-    uint8_t *src1, *src2;
+    uint8_t *current_frame_data, *reference_frame_data;
     Transform t = {{0},0}, orig = {{0},0};
     float matrix[9];
     float alpha;
@@ -467,132 +466,114 @@ static void end_frame(AVFilterLink *link)
 
 #ifdef EXPER01
     MotionVector start, end;  // For arrows.
-    u_int32_t  *p_32_01, *p_32_02, *p_32_03;
-    static int fuss = 0;
-    static int maxfuss = 5;
-    if (DESHAKE_ZOOM >= 0)
-        t.zoom = orig.zoom = DESHAKE_ZOOM;
-    if (maxfuss && link != NULL && link->dstpad != NULL) {
-//         av_log(deshake,AV_LOG_ERROR,"%s %s %d: end_frame in link is at %p\n", __FILE__,__func__,__LINE__,link->dstpad->end_frame);
-        maxfuss--;
-    }
 #endif
-
     ADDTIME("entry","\n");
-    src1  = (deshake->ref == NULL) ? in->data[0] : deshake->ref->data[0];
-    src2  = in->data[0];
-#ifdef EXPER01
-    alpha = (DESHAKE_ALPHA > 0)? DESHAKE_ALPHA : (deshake->reference_frames)? 2.0 / deshake->reference_frames : 0.5;
-#else
-    alpha = 2.0 / deshake->reference_frames;
-#endif
+    current_frame_data  = in->data[0];
 
-    if (deshake->cx < 0 || deshake->cy < 0 || deshake->cw < 0 || deshake->ch < 0) {
+    if (deshake->ref) {
+        reference_frame_data = deshake->ref->data[0];
+        alpha = 2.0 / deshake->reference_frames;
+
         // Find the most likely global motion for the current frame
-        find_motion(deshake, src1, in->data[0], link->w, link->h, in->linesize[0], &t);
-    } else {
-        deshake->cx = FFMIN(deshake->cx, link->w);
-        deshake->cy = FFMIN(deshake->cy, link->h);
-
-        if ((unsigned)deshake->cx + (unsigned)deshake->cw > link->w) deshake->cw = link->w - deshake->cx;
-        if ((unsigned)deshake->cy + (unsigned)deshake->ch > link->h) deshake->ch = link->h - deshake->cy;
-
-        // Quadword align right margin
-        deshake->cw &= ~15;
-
-        src1 += deshake->cy * in->linesize[0] + deshake->cx;
-        src2 += deshake->cy * in->linesize[0] + deshake->cx;
-
-        find_motion(deshake, src1, src2, deshake->cw, deshake->ch, in->linesize[0], &t);
-    }
-    ADDTIME("find motion done","\n");
-    orig = t;   // Copy transform so we can output it later to compare to the smoothed value
+        if (deshake->cx < 0 || deshake->cy < 0 || deshake->cw < 0 || deshake->ch < 0) {
+            find_motion(deshake, reference_frame_data, in->data[0], link->w, link->h, in->linesize[0], &t);
+        } else {
+            deshake->cx = FFMIN(deshake->cx, link->w);
+            deshake->cy = FFMIN(deshake->cy, link->h);
+            if ((unsigned)deshake->cx + (unsigned)deshake->cw > link->w) deshake->cw = link->w - deshake->cx;
+            if ((unsigned)deshake->cy + (unsigned)deshake->ch > link->h) deshake->ch = link->h - deshake->cy;
+            // Quadword align right margin
+            deshake->cw &= ~15;
+            reference_frame_data += deshake->cy * in->linesize[0] + deshake->cx;
+            current_frame_data += deshake->cy * in->linesize[0] + deshake->cx;
+            find_motion(deshake, reference_frame_data, current_frame_data, deshake->cw, deshake->ch, in->linesize[0], &t);
+        }
+        ADDTIME("find motion done","\n");
+        orig = t;   // Copy transform so we can output it later to compare to the smoothed value
 
 #ifdef EXPER01
-    if (OPTMASK(OPT_LOG_POST_FIND_MOTION_01)) {
-        av_log(deshake,AV_LOG_ERROR,"%s %d: %8lu: %f %f %f   %f %f %f   %f %f %f   %f %f %f\n", \
-               __func__,__LINE__, fcount, orig.vector.x, deshake->avg.vector.x, t.vector.x, orig.vector.y, deshake->avg.vector.y, t.vector.y, orig.angle, deshake->avg.angle, t.angle, orig.zoom, deshake->avg.zoom, t.zoom);
-    }
+        if (OPTMASK(OPT_LOG_POST_FIND_MOTION_01)) {
+            av_log(deshake,AV_LOG_ERROR,"%s %d: %8lu: %f %f %f   %f %f %f   %f %f %f   %f %f %f\n", \
+                   __func__,__LINE__, fcount, orig.vector.x, deshake->avg.vector.x, t.vector.x, orig.vector.y, deshake->avg.vector.y, t.vector.y, orig.angle, deshake->avg.angle, t.angle, orig.zoom, deshake->avg.zoom, t.zoom);
+        }
 #endif
-    // Generate a one-sided moving exponential average
-    deshake->avg.vector.x = alpha * t.vector.x + (1.0 - alpha) * deshake->avg.vector.x;
-    deshake->avg.vector.y = alpha * t.vector.y + (1.0 - alpha) * deshake->avg.vector.y;
-    deshake->avg.angle = alpha * t.angle + (1.0 - alpha) * deshake->avg.angle;
-    deshake->avg.zoom = alpha * t.zoom + (1.0 - alpha) * deshake->avg.zoom;
+        // Generate a one-sided moving exponential average
+        deshake->avg.vector.x = alpha * t.vector.x + (1.0 - alpha) * deshake->avg.vector.x;
+        deshake->avg.vector.y = alpha * t.vector.y + (1.0 - alpha) * deshake->avg.vector.y;
+        deshake->avg.angle = alpha * t.angle + (1.0 - alpha) * deshake->avg.angle;
+        deshake->avg.zoom = alpha * t.zoom + (1.0 - alpha) * deshake->avg.zoom;
 
 #if defined(EXPER01)
-    start.x = deshake->avg.vector.x;  // Arrows: store current points before transform.
-    start.y = deshake->avg.vector.y;
-    end.x = t.vector.x;
-    end.y = t.vector.y;
-    if (OPTMASK(OPT_LOG_POST_FIND_MOTION_01)) {
-        av_log(deshake,AV_LOG_ERROR,"%s %d: %8lu: %f %f %f   %f %f %f   %f %f %f   %f %f %f\n", \
-               __func__,__LINE__, fcount, orig.vector.x, deshake->avg.vector.x, t.vector.x, orig.vector.y, deshake->avg.vector.y, t.vector.y, orig.angle, deshake->avg.angle, t.angle, orig.zoom, deshake->avg.zoom, t.zoom);
-    }
+        start.x = deshake->avg.vector.x;  // Arrows: store current points before transform.
+        start.y = deshake->avg.vector.y;
+        end.x = t.vector.x;
+        end.y = t.vector.y;
+        if (OPTMASK(OPT_LOG_POST_FIND_MOTION_01)) {
+            av_log(deshake,AV_LOG_ERROR,"%s %d: %8lu: %f %f %f   %f %f %f   %f %f %f   %f %f %f\n", \
+                   __func__,__LINE__, fcount, orig.vector.x, deshake->avg.vector.x, t.vector.x, orig.vector.y, deshake->avg.vector.y, t.vector.y, orig.angle, deshake->avg.angle, t.angle, orig.zoom, deshake->avg.zoom, t.zoom);
+        }
 #endif
-    T_OP(t,-=,deshake->avg);  // Remove the average from the current motion to detect the motion that is not on purpose, just as jitter from bumping the camera
+        T_OP(t,-=,deshake->avg);  // Remove the average from the current motion to detect the motion that is not on purpose, just as jitter from bumping the camera
 
-    t.vector.x *= -1;
-    t.vector.y *= -1;
-    t.angle *= -1;
+        t.vector.x *= -1;
+        t.vector.y *= -1;
+        t.angle *= -1;
 
-    // Write statistics to file if requested.
-    if (deshake->fp) {
+        // Write statistics to file if requested.
+        if (deshake->fp) {
 #ifdef EXPER01
-        statmsg = av_asprintf("%8lu: %6.2f  %6.2f  %6.2f    %6.2f  %6.2f  %6.2f    %6.2f  %6.2f  %6.2f    %6.2f  %6.2f  %6.2f\n", \
-                              fcount, orig.vector.x, orig.vector.y, deshake->avg.vector.x, deshake->avg.vector.y, t.vector.x, t.vector.y, orig.angle, deshake->avg.angle, t.angle, orig.zoom, deshake->avg.zoom, t.zoom);
-        fwrite(statmsg, sizeof(char), strlen(statmsg), deshake->fp);
-        fflush(deshake->fp);
+            statmsg = av_asprintf("%8lu: %6.2f  %6.2f  %6.2f    %6.2f  %6.2f  %6.2f    %6.2f  %6.2f  %6.2f    %6.2f  %6.2f  %6.2f\n", \
+                                  fcount, orig.vector.x, orig.vector.y, deshake->avg.vector.x, deshake->avg.vector.y, t.vector.x, t.vector.y, orig.angle, deshake->avg.angle, t.angle, orig.zoom, deshake->avg.zoom, t.zoom);
+            fwrite(statmsg, sizeof(char), strlen(statmsg), deshake->fp);
+            fflush(deshake->fp);
 #else
-        statmsg = av_asprintf("          %6.2f  %6.2f  %6.2f    %6.2f  %6.2f  %6.2f    %6.2f  %6.2f  %6.2f    %6.2f  %6.2f  %6.2f\n", \
-                              orig.vector.x, orig.vector.y, deshake->avg.vector.x, deshake->avg.vector.y, t.vector.x, t.vector.y, orig.angle, deshake->avg.angle, t.angle, orig.zoom, deshake->avg.zoom, t.zoom);
-        fwrite(statmsg, sizeof(char), strlen(statmsg), deshake->fp);
+            statmsg = av_asprintf("          %6.2f  %6.2f  %6.2f    %6.2f  %6.2f  %6.2f    %6.2f  %6.2f  %6.2f    %6.2f  %6.2f  %6.2f\n", \
+                                  orig.vector.x, orig.vector.y, deshake->avg.vector.x, deshake->avg.vector.y, t.vector.x, t.vector.y, orig.angle, deshake->avg.angle, t.angle, orig.zoom, deshake->avg.zoom, t.zoom);
+            fwrite(statmsg, sizeof(char), strlen(statmsg), deshake->fp);
 #endif
-        av_free(statmsg);
-    }
+            av_freep(&statmsg);
+        }
 
-    T_OP(t,+=,deshake->last); // Turn relative current frame motion into absolute by adding it to the last absolute motion
+        T_OP(t,+=,deshake->last); // Turn relative current frame motion into absolute by adding it to the last absolute motion
 
-    // Shrink motion by 10% to keep things centered in the camera frame
-    t.vector.x *= 0.9;
-    t.vector.y *= 0.9;
-    t.angle *= 0.9;
+        // Shrink motion by 10% to keep things centered in the camera frame
+        t.vector.x *= 0.9;
+        t.vector.y *= 0.9;
+        t.angle *= 0.9;
 
-    deshake->last = t;  // Store the last absolute motion information
+        deshake->last = t;  // Store the last absolute motion information
 
-    // Generate a luma transformation matrix
-    avfilter_get_matrix(t.vector.x, t.vector.y, t.angle, 1.0 + t.zoom / 100.0, matrix);
-
-    // Transform the luma plane
 #ifdef EXPER01
-    ADDTIME("before luma transform","\n");
-    avfilter_transform(src2, out->data[0], in->linesize[0], out->linesize[0], link->w, link->h, matrix, 0, INTERPOLATE_METHOD_LUMA, deshake->edge, &deshake->extra);
+        // Generate a luma transformation matrix
+        avfilter_get_matrix(t.vector.x, t.vector.y, t.angle, 1.0 + t.zoom / 100.0, matrix);
+        // Transform the luma plane
+        ADDTIME("before luma transform","\n");
+        avfilter_transform(current_frame_data, out->data[0], in->linesize[0], out->linesize[0], link->w, link->h, matrix, 0, INTERPOLATE_METHOD_LUMA, deshake->edge, &deshake->extra);
+        // Generate a chroma transformation matrix
+        avfilter_get_matrix(t.vector.x / (link->w / CHROMA_WIDTH(link)), t.vector.y / (link->h / CHROMA_HEIGHT(link)), t.angle, 1.0 + t.zoom / 100.0, matrix);
+        // Transform the chroma planes
+        ADDTIME("before chroma transform","1");
+        avfilter_transform(in->data[1], out->data[1], in->linesize[1], out->linesize[1], CHROMA_WIDTH(link), CHROMA_HEIGHT(link), matrix, 127, INTERPOLATE_METHOD_CHROMA, deshake->edge, &deshake->extra);
+        ADDTIME("before chroma transform","2");
+        avfilter_transform(in->data[2], out->data[2], in->linesize[2], out->linesize[2], CHROMA_WIDTH(link), CHROMA_HEIGHT(link), matrix, 127, INTERPOLATE_METHOD_CHROMA, deshake->edge, &deshake->extra);
+        do_vectors(deshake, link, &t, &orig);
+        ADDTIME("final processing","\n");
 #else
-    avfilter_transform(src2, out->data[0], in->linesize[0], out->linesize[0], link->w, link->h, matrix, 0, INTERPOLATE_BILINEAR, deshake->edge);
-#endif
-    // Generate a chroma transformation matrix
-    avfilter_get_matrix(t.vector.x / (link->w / CHROMA_WIDTH(link)), t.vector.y / (link->h / CHROMA_HEIGHT(link)), t.angle, 1.0 + t.zoom / 100.0, matrix);
-
-    // Transform the chroma planes
-#ifdef EXPER01
-    ADDTIME("before chroma transform","1");
-    avfilter_transform(in->data[1], out->data[1], in->linesize[1], out->linesize[1], CHROMA_WIDTH(link), CHROMA_HEIGHT(link), matrix, 127, INTERPOLATE_METHOD_CHROMA, deshake->edge, &deshake->extra);
-    ADDTIME("before chroma transform","2");
-    avfilter_transform(in->data[2], out->data[2], in->linesize[2], out->linesize[2], CHROMA_WIDTH(link), CHROMA_HEIGHT(link), matrix, 127, INTERPOLATE_METHOD_CHROMA, deshake->edge, &deshake->extra);
-#else
-    avfilter_transform(in->data[1], out->data[1], in->linesize[1], out->linesize[1], CHROMA_WIDTH(link), CHROMA_HEIGHT(link), matrix, 127, INTERPOLATE_BILINEAR, deshake->edge);
-    avfilter_transform(in->data[2], out->data[2], in->linesize[2], out->linesize[2], CHROMA_WIDTH(link), CHROMA_HEIGHT(link), matrix, 127, INTERPOLATE_BILINEAR, deshake->edge);
+        // Generate a luma transformation matrix
+        avfilter_get_matrix(t.vector.x, t.vector.y, t.angle, 1.0 + t.zoom / 100.0, matrix);
+        // Transform the luma plane
+        avfilter_transform(current_frame_data, out->data[0], in->linesize[0], out->linesize[0], link->w, link->h, matrix, 0, INTERPOLATE_BILINEAR, deshake->edge);
+        // Generate a chroma transformation matrix
+        avfilter_get_matrix(t.vector.x / (link->w / CHROMA_WIDTH(link)), t.vector.y / (link->h / CHROMA_HEIGHT(link)), t.angle, 1.0 + t.zoom / 100.0, matrix);
+        // Transform the chroma planes
+        avfilter_transform(in->data[1], out->data[1], in->linesize[1], out->linesize[1], CHROMA_WIDTH(link), CHROMA_HEIGHT(link), matrix, 127, INTERPOLATE_BILINEAR, deshake->edge);
+        avfilter_transform(in->data[2], out->data[2], in->linesize[2], out->linesize[2], CHROMA_WIDTH(link), CHROMA_HEIGHT(link), matrix, 127, INTERPOLATE_BILINEAR, deshake->edge);
 #endif
 
-#ifdef EXPER01
-    do_vectors(deshake, link, &t, &orig);
-#endif
-    ADDTIME("final processing","\n");
-
-    // Store the current frame as the reference frame for calculating the
-    // motion of the next frame
-    if (deshake->ref != NULL)
+        // Store the current frame as the reference frame for calculating the
+        // motion of the next frame
         avfilter_unref_buffer(deshake->ref);
+    } // if (deshake->ref)
 
     // Cleanup the old reference frame
     deshake->ref = in;

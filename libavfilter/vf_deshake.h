@@ -95,10 +95,10 @@ typedef struct {
 } MotionVector;
 
 /* Temporarily in exper01.h
-typedef struct {
-    int x;             ///< Horizontal shift
-    int y;             ///< Vertical shift
-} IntMotionVector;
+   typedef struct {
+   int x;             ///< Horizontal shift
+   int y;             ///< Vertical shift
+   } IntMotionVector;
 */
 
 /** Description of a transform.

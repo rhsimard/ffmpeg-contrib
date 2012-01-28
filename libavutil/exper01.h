@@ -149,7 +149,7 @@ typedef struct {
  * in a linked list.
  */
 typedef struct s_arrow {
-    int  index, count, startx, starty, endx, endy, highlight;  // Arrow
+    int  index, count, startx, starty, endx, endy, highlight, block_x, block_y;  // Arrow
     char* annotation;
     struct s_arrow *next;
 }ArrowAnnotation;

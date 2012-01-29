@@ -557,7 +557,6 @@ static av_cold int init(AVFilterContext *ctx, const char *args, void *opaque)
 
 #define INIT_EXPER01_DEFAULTS(dummy)                            \
     do {                                                        \
-        deshake->extra.alpha = ALPHA_DEFAULT;                   \
         INTERPOLATE_METHOD_LUMA   = INTERP_LUMA_DEFAULT;        \
         INTERPOLATE_METHOD_CHROMA = INTERP_CHROMA_DEFAULT;      \
         deshake->reference_frames = REFERENCE_FRAMES_DEFAULT;   \
@@ -592,7 +591,7 @@ static av_cold int init(AVFilterContext *ctx, const char *args, void *opaque)
             argstring = args+5;
         }
     } else {
-        argstring = NULL;
+        av_assert0(argstring == NULL);  // Checking something...
     }
 #  else /* ifdef USE_AVOPTION */
 
@@ -613,13 +612,10 @@ static av_cold int init(AVFilterContext *ctx, const char *args, void *opaque)
     if (argstring && *argstring) {
 #ifdef EXPER01
         int nconv;
-        nconv = sscanf(argstring, "%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%f:%Li:%f:%255s",
+        nconv = sscanf(argstring, "%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%f:%Li:%255s",
                        &deshake->cx, &deshake->cy, &deshake->cw, &deshake->ch,
                        &deshake->rx, &deshake->ry, (int *)&deshake->edge,
-                       &deshake->blocksize, &deshake->contrast, (int *)&deshake->search, &DESHAKE_ZOOM, (long long int*)&deshake->extra.optmask, &DESHAKE_ALPHA, filename);
-        if (DESHAKE_ALPHA >= 0) {
-            DESHAKE_ALPHA = av_clipf(DESHAKE_ALPHA,0.01,0.99);
-        }
+                       &deshake->blocksize, &deshake->contrast, (int *)&deshake->search, &DESHAKE_ZOOM, (long long int*)&deshake->extra.optmask, filename);
         global_option_01 = OPTMASK(OPT_GLOBAL_01);
         global_option_02 = OPTMASK(OPT_GLOBAL_02);
 #  ifdef USE_AVOPTION
@@ -663,10 +659,10 @@ static av_cold int init(AVFilterContext *ctx, const char *args, void *opaque)
 
 #ifdef EXPER01
     p_32_01 = (u_int32_t*)&deshake->extra.optmask;
-    av_log(ctx, AV_LOG_INFO, "cx: %d, cy: %d, cw: %d, ch: %d, rx: %d, ry: %d, edge: %d blocksize: %d contrast: %d search: %d  zoom: %f  option mask: 0x%08lx %08lx  alpha: %f  ref frames: %d  diff-limit: %d  interp: %d,%d%s%s\n",
+    av_log(ctx, AV_LOG_INFO, "cx: %d, cy: %d, cw: %d, ch: %d, rx: %d, ry: %d, edge: %d blocksize: %d contrast: %d search: %d  zoom: %f  option mask: 0x%08lx %08lx  ref frames: %d  diff-limit: %d  interp: %d,%d%s%s\n",
            deshake->cx, deshake->cy, deshake->cw, deshake->ch,
            deshake->rx, deshake->ry, deshake->edge, deshake->blocksize * 2, deshake->contrast, deshake->search, DESHAKE_ZOOM,
-           (unsigned long)p_32_01[1], (unsigned long)p_32_01[0], DESHAKE_ALPHA, deshake->reference_frames, deshake->extra.diff_limit, deshake->extra.interpolate_luma, deshake->extra.interpolate_chroma,
+           (unsigned long)p_32_01[1], (unsigned long)p_32_01[0], deshake->reference_frames, deshake->extra.diff_limit, deshake->extra.interpolate_luma, deshake->extra.interpolate_chroma,
            (deshake->extra.logfile && *deshake->extra.logfile? "  log file: " : " oh "), (deshake->extra.logfile && *deshake->extra.logfile? deshake->extra.logfile : " no "));
     if (deshake->extra.optmask) {
         av_log(ctx,AV_LOG_VERBOSE,"Enabled deshake options: ");

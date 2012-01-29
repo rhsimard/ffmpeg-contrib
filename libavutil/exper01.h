@@ -131,13 +131,15 @@ extern int global_option_02;
 extern int global_option_03;
 extern int global_option_04;
 
-
-//#define DESHAKE_OPTMASK(x) dummy_optmask
-//#define DESHAKE_ZOOM(x) dummy_zoom
-#define DESHAKE_ZOOM (deshake->extra.zoom)
-#define DESHAKE_WINNING_COUNT (deshake->extra.winning_count)
-#define DESHAKE_WINNING_MV (deshake->extra.imvs[0])
-#define DESHAKE_ALPHA (deshake->extra.alpha)
+#ifdef EXPER01
+#  define DESHAKE_ZOOM (deshake->extra.zoom)
+#  define DESHAKE_WINNING_COUNT (deshake->extra.winning_count)
+#  define DESHAKE_WINNING_MV (deshake->extra.imvs[0])
+#else
+#  define DESHAKE_ZOOM
+#  define DESHAKE_WINNING_COUNT
+#  define DESHAKE_WINNING_MV
+#endif
 
 // Normally in vf_deshake.c
 typedef struct {
@@ -155,7 +157,6 @@ typedef struct {
     int                 n_valid_imvs;     /** Number of valid motion vectors in invs                     */
     int                 winning_count;    /** The count found in find_motion that is chosen for the gmv  */
     struct timeval      tvs[16];          /** Timevals for general use; first is reserved for the time track functions. */
-    float               alpha;            /** User-specified alpha for exponential average, if any; overrides default. */
     float               zoom;             /** substitute zoom for test                                   */
     int                 diff_limit;       /** Maximum diff from SAD that can still be accepted           */
     char               *logfile;          /** Optional log file                                          */

@@ -1,5 +1,15 @@
 /** @file
- *  Extra stuff for my development work.
+ * Functions for test and development.
+ *
+ * Most of this is intended for testing, though some may find some part of it
+ * useful, or at least entertaining.  If something turns out to be of interest,
+ * it will be integrated with the main body of code.
+ *
+ * Funtions here:
+ *   - Draw vectors over each of the blocks when the SAD functions indicate a shift.
+ *   - Draw final vectors to final point from original and average values.
+ *
+ * These are controlled by the option mask.
  */
 
 #include "avfilter.h"
@@ -11,16 +21,9 @@
 #include "libavutil/colorspace.h"
 #include "libavutil/opt.h"
 
-////////// HELLO
-
 #include "transform.h"
 #include "libavutil/exper01.h"
 #include "libavfilter/vf_deshake.h"
-
-/** @name Special development-support functions
- *
- * Generally intended for testing and development, but some may also find it useful, or at least entertaining.
- * @{*/
 
 ArrowAnnotation *arrow_root = NULL;
 static void draw_vectors_r(DeshakeContext *deshake, const ArrowAnnotation *root, AVFilterBufferRef *avbuf, int w, int h, int stride, int normalizing_scale, int color, int highlight_color);
@@ -212,4 +215,3 @@ static void draw_vectors_r(DeshakeContext *deshake, const ArrowAnnotation *root,
         av_free(root);
     }
 }
-/** @}*/

@@ -12,7 +12,8 @@
 #  define LOGFILE filename
 #endif
 
-/** @name Parameter defaults and user-option limits
+/** @name Parameter defaults and user-option limits.
+ * Limits provided to the AVOption system.
  * @{ */
 #define RX_DEFAULT         (16)  ///< X-axis search extent default
 #define RX_MAX             (63)  ///< X-axis search extent max

@@ -82,7 +82,6 @@ static const AVOption deshake_options[]= {
     /* The following are newly-added items for test. */
     {"optmask"       , "option bitmask"               , OFFSET(extra.s_optmask)         , AV_OPT_TYPE_STRING, {.str=NULL                     },  CHAR_MIN, CHAR_MAX             },
     {"zoom"          , "test zoom factor"             , OFFSET(extra.zoom)              , AV_OPT_TYPE_FLOAT,  {.dbl=1.0                      },  0.0, 1000000.0                 },
-    {"alpha"         , "subst. alpha for exp. avg."   , OFFSET(extra.alpha)             , AV_OPT_TYPE_FLOAT,  {.dbl=ALPHA_DEFAULT            },  -1.0, ALPHA_MAX                },
     {"ref-frames"    , "subst. reference frame count" , OFFSET(reference_frames)        , AV_OPT_TYPE_INT,    {.dbl=REFERENCE_FRAMES_DEFAULT },  0, INT_MAX                     },
     {"diff-limit"    , "largest SAD diff"             , OFFSET(extra.diff_limit)        , AV_OPT_TYPE_INT,    {.dbl=DIFF_LIMIT_DEFAULT       },  DIFF_LIMIT_MIN, DIFF_LIMIT_MAX },
     {"interp-luma"   , "interpolation method, luma"   , OFFSET(extra.interpolate_luma)  , AV_OPT_TYPE_INT,    {.dbl=INTERP_LUMA_DEFAULT      },  0, INTERPOLATE_COUNT -1        },
@@ -148,11 +147,7 @@ double clean_mean(double *values, int count)
  * @return Calculated contrast value
  * @todo Check on the possibility that MMX could help here.
  */
-#ifdef EXPER01
-int block_contrast(uint8_t *src, int x, int y, int stride, int blocksize, DeshakeContext *deshake)
-#else
-    static int block_contrast(uint8_t *src, int x, int y, int stride, int blocksize)
-#endif
+int DEF_ADD_DESHAKE(block_contrast, uint8_t *src, int x, int y, int stride, int blocksize)
 {
     int highest = 0;
     int lowest = 0;
@@ -242,11 +237,7 @@ static void find_block_motion(DeshakeContext *deshake, uint8_t *src1,
                     smallest = diff;
                     mv->x = x;
                     mv->y = y;
-#ifdef EXPER01
-                    if (OPTMASK(OPT_LOG_FIND_BLOCK_MOTION_EXHAUSTIVE_LOOP)) {
-                        av_log(deshake,AV_LOG_ERROR,"%s %d: x=%4d y=%4d diff=%5d smallest=%5d\n", __func__,__LINE__,x, y, diff, smallest);
-                    }
-#endif
+                    LOG_IF_OPTMASK(OPT_LOG_FIND_BLOCK_MOTION_EXHAUSTIVE_LOOP, deshake,AV_LOG_ERROR,"%s %d: x=%4d y=%4d diff=%5d smallest=%5d\n", __func__,__LINE__,x, y, diff, smallest);
                 }
             }
         }
@@ -259,11 +250,7 @@ static void find_block_motion(DeshakeContext *deshake, uint8_t *src1,
                     smallest = diff;
                     mv->x = x;
                     mv->y = y;
-#ifdef EXPER01
-                    if (OPTMASK(OPT_LOG_FIND_BLOCK_MOTION_SMART_EXHAUSTIVE_LOOP)) {
-                        av_log(deshake,AV_LOG_ERROR,"%s %d: x=%4d y=%4d diff=%5d smallest=%5d\n", __func__,__LINE__,x, y, diff, smallest);
-                    }
-#endif
+                    LOG_IF_OPTMASK(OPT_LOG_FIND_BLOCK_MOTION_SMART_EXHAUSTIVE_LOOP, deshake,AV_LOG_ERROR,"%s %d: x=%4d y=%4d diff=%5d smallest=%5d\n", __func__,__LINE__,x, y, diff, smallest);
                 }
             }
         }
@@ -277,39 +264,24 @@ static void find_block_motion(DeshakeContext *deshake, uint8_t *src1,
                 if (x == tmp && y == tmp2) {
                     continue;
                 }
-
                 diff = CMP(bx - x, by - y);
                 if (diff < smallest) {
                     smallest = diff;
                     mv->x = x;
                     mv->y = y;
-#ifdef EXPER01
-                    if (OPTMASK(OPT_LOG_FIND_BLOCK_MOTION_SMART_EXHAUSTIVE_LOOP)) {
-                        av_log(deshake,AV_LOG_ERROR,"%s %d: x=%d y=%d diff=%d smallest=%d\n", __func__,__LINE__,x, y, diff, smallest);
-                    }
-#endif
+                    LOG_IF_OPTMASK(OPT_LOG_FIND_BLOCK_MOTION_SMART_EXHAUSTIVE_LOOP, deshake, AV_LOG_ERROR, "%s %d: x=%d y=%d diff=%d smallest=%d\n", __func__,__LINE__,x, y, diff, smallest);
                 }
             }
         }
     }
     emms_c();  // Inform the CPU we're done doing MMX instructions.
 
-#ifdef EXPER01
-    if (smallest > deshake->extra.diff_limit) {
-#else
-        if (smallest > 512) {
-#endif
-            mv->x = -1;
-            mv->y = -1;
-#ifndef EXPER01
-        } // Emacs is weird about indentation here.
-#else
+    if (smallest > PARAM_IF(deshake->extra.diff_limit, 512)) {
+        mv->x = -1;
+        mv->y = -1;
     }
-    if (OPTMASK(OPT_LOG_FIND_BLOCK_MOTION_FINAL)) {
-        av_log(NULL, AV_LOG_ERROR, "%s %d: Final: smallest =%4d  mv->x =%4d  mv->y =%4d\n", __func__, __LINE__, smallest, mv->x, mv->y);
-    }
+    LOG_IF_OPTMASK(OPT_LOG_FIND_BLOCK_MOTION_FINAL, NULL, AV_LOG_ERROR, "%s %d: Final: smallest =%4d  mv->x =%4d  mv->y =%4d\n", __func__, __LINE__, smallest, mv->x, mv->y);
     ADDTIME("exit","\n");
-#endif
 }
 
 /**
@@ -329,51 +301,29 @@ static void find_block_motion(DeshakeContext *deshake, uint8_t *src1,
 static void find_motion(DeshakeContext *deshake, uint8_t *src1, uint8_t *src2,
                         int width, int height, int stride, Transform *t)
 {
-    int x, y, n;
-    IntMotionVector mv = {0, 0};
-    int counts[BLOCKSIZE_MAX][BLOCKSIZE_MAX] = {{0}};
-    int count_max_value = 0;
-    int contrast;
+    IntMotionVector mv = {0};
+    int counts[BLOCKSIZE_MAX][BLOCKSIZE_MAX] = {{0}}, count_max_value = 0, contrast, pos, center_x = 0, center_y = 0, x, y, n;
+    double *angles = av_malloc(sizeof(*angles) * width * height / (16 * deshake->blocksize)), p_x, p_y;
+
 #ifdef EXPER01
     double pre_clip_x, pre_clip_y;
-#endif
-
-    int pos;
-    double *angles = av_malloc(sizeof(*angles) * width * height / (16 * deshake->blocksize));
-    int center_x = 0, center_y = 0;
-    double p_x, p_y;
-
-#ifdef EXPER01
     ADDTIME("entry","\n");
     DESHAKE_WINNING_COUNT = -1;
 #endif
-
     pos = 0;
     // Find motion for every block and store the motion vector in the counts
     for (y = deshake->ry; y < height - deshake->ry - (deshake->blocksize * 2); y += deshake->blocksize * 2) {
         // We use a width of 16 here to match the libavcodec SAD functions
         for (x = deshake->rx; x < width - deshake->rx - 16; x += 16) {
             // If the contrast is too low, just skip this block as it probably won't be very useful to us.
-#ifdef EXPER01
-            contrast = block_contrast(src2, x, y, stride, deshake->blocksize, deshake);
-#else
-            contrast = block_contrast(src2, x, y, stride, deshake->blocksize);
-#endif
+            contrast = CALL_ADD_DESHAKE(block_contrast, src2, x, y, stride, deshake->blocksize);
             if (contrast > deshake->contrast) {
-#ifdef EXPER01
-                if (OPTMASK(OPT_LOG_CALL_FIND_BLOCK_MOTION)) {
-                    av_log(deshake,AV_LOG_ERROR,"%s %d: (fcount =%3lu) calling find_block_motion:  x=%3d   y=%3d   stride=%3d   (contrast=%3d, src1 = %p, src2 = %p)\n",
+                LOG_IF_OPTMASK(OPT_LOG_CALL_FIND_BLOCK_MOTION, deshake,AV_LOG_ERROR,"%s %d: (fcount =%3lu) calling find_block_motion:  x=%3d   y=%3d   stride=%3d   (contrast=%3d, src1 = %p, src2 = %p)\n",
                            __func__,__LINE__, fcount, x, y, stride, contrast, src1, src2);
-                }
                 ADDTIME("find_block_motion call","x = %d  y = %d\n", x, y);
-#endif
                 find_block_motion(deshake, src1, src2, x, y, stride, &mv);
                 if (mv.x != -1 && mv.y != -1) {
-#ifdef EXPER01
-                    if (OPTMASK(OPT_LOG_CALL_FIND_BLOCK_MOTION)) {
-                        av_log(NULL,AV_LOG_ERROR,"mv returns %d, %d\n", mv.x, mv.y);
-                    }
-#endif
+                    LOG_IF_OPTMASK(OPT_LOG_CALL_FIND_BLOCK_MOTION, NULL,AV_LOG_ERROR,"mv returns %d, %d\n", mv.x, mv.y);
                     if ((n = ++counts[mv.x + deshake->rx][mv.y + deshake->ry]) > count_max_value) {
                         count_max_value = n;
                         t->vector.x = mv.x;
@@ -389,9 +339,7 @@ static void find_motion(DeshakeContext *deshake, uint8_t *src1, uint8_t *src2,
                     }
                     center_x += mv.x;
                     center_y += mv.y;
-#ifdef EXPER01
-                    find_motion_generate_block_vectors(deshake, x, y, counts, &mv);
-#endif
+                    CALL_ADD_DESHAKE(find_motion_generate_block_vectors, x, y, counts, &mv);
                 }
             }
         }
@@ -422,20 +370,15 @@ static void find_motion(DeshakeContext *deshake, uint8_t *src1, uint8_t *src2,
     t->angle = av_clipf(t->angle, -0.1, 0.1);
 
     av_free(angles);
-#ifdef EXPER01
-    if (OPTMASK(OPT_LOG_FIND_MOTION_FINAL)) {
-        av_log(deshake,AV_LOG_ERROR,"%s %d: (Winner: count =%5d: x =%4d y =%4d) t->vector: { %8.3f %8.3f %8.3f } (pre-clip x and y: %8.3f %8.3f)  pos =%4d   center_x =%4d   center_y =%4d  px =%8.3f  py =%8.3f\n",
-               __func__,__LINE__,DESHAKE_WINNING_COUNT, DESHAKE_WINNING_MV.x, DESHAKE_WINNING_MV.y, t->vector.x,t->vector.y,t->angle, pre_clip_x, pre_clip_y,  pos, center_x, center_y, p_x, p_y);
-    }
+    LOG_IF_OPTMASK(OPT_LOG_FIND_MOTION_FINAL, deshake,AV_LOG_ERROR,
+                   "%s %d: (Winner: count =%5d: x =%4d y =%4d) t->vector: { %8.3f %8.3f %8.3f } (pre-clip x and y: %8.3f %8.3f)  pos =%4d   center_x =%4d   center_y =%4d  px =%8.3f  py =%8.3f\n",
+                   __func__,__LINE__,DESHAKE_WINNING_COUNT, DESHAKE_WINNING_MV.x, DESHAKE_WINNING_MV.y, t->vector.x,t->vector.y,t->angle, pre_clip_x, pre_clip_y,  pos, center_x, center_y, p_x, p_y);
     ADDTIME("exit","\n");
-#endif
 }
-
 /**@}*/
 
 /** @name System-defined processing functions
  * @{*/
-
 /**
  * Draw a slice (unused);
  * @todo Docs say processing should happen here, not in end_frame; check up on this.
@@ -466,8 +409,8 @@ static void end_frame(AVFilterLink *link)
 
 #ifdef EXPER01
     MotionVector start, end;  // For arrows.
-#endif
     ADDTIME("entry","\n");
+#endif
     current_frame_data  = in->data[0];
 
     if (deshake->ref) {
@@ -490,13 +433,8 @@ static void end_frame(AVFilterLink *link)
         }
         ADDTIME("find motion done","\n");
         orig = t;   // Copy transform so we can output it later to compare to the smoothed value
-
-#ifdef EXPER01
-        if (OPTMASK(OPT_LOG_POST_FIND_MOTION_01)) {
-            av_log(deshake,AV_LOG_ERROR,"%s %d: %8lu: %f %f %f   %f %f %f   %f %f %f   %f %f %f\n", \
+        LOG_IF_OPTMASK(OPT_LOG_POST_FIND_MOTION_01, deshake,AV_LOG_ERROR,"%s %d: %8lu: %f %f %f   %f %f %f   %f %f %f   %f %f %f\n", \
                    __func__,__LINE__, fcount, orig.vector.x, deshake->avg.vector.x, t.vector.x, orig.vector.y, deshake->avg.vector.y, t.vector.y, orig.angle, deshake->avg.angle, t.angle, orig.zoom, deshake->avg.zoom, t.zoom);
-        }
-#endif
         // Generate a one-sided moving exponential average
         deshake->avg.vector.x = alpha * t.vector.x + (1.0 - alpha) * deshake->avg.vector.x;
         deshake->avg.vector.y = alpha * t.vector.y + (1.0 - alpha) * deshake->avg.vector.y;
@@ -508,10 +446,8 @@ static void end_frame(AVFilterLink *link)
         start.y = deshake->avg.vector.y;
         end.x = t.vector.x;
         end.y = t.vector.y;
-        if (OPTMASK(OPT_LOG_POST_FIND_MOTION_01)) {
-            av_log(deshake,AV_LOG_ERROR,"%s %d: %8lu: %f %f %f   %f %f %f   %f %f %f   %f %f %f\n", \
+        LOG_IF_OPTMASK(OPT_LOG_POST_FIND_MOTION_01, deshake,AV_LOG_ERROR,"%s %d: %8lu: %f %f %f   %f %f %f   %f %f %f   %f %f %f\n", \
                    __func__,__LINE__, fcount, orig.vector.x, deshake->avg.vector.x, t.vector.x, orig.vector.y, deshake->avg.vector.y, t.vector.y, orig.angle, deshake->avg.angle, t.angle, orig.zoom, deshake->avg.zoom, t.zoom);
-        }
 #endif
         T_OP(t,-=,deshake->avg);  // Remove the average from the current motion to detect the motion that is not on purpose, just as jitter from bumping the camera
 
@@ -524,13 +460,11 @@ static void end_frame(AVFilterLink *link)
 #ifdef EXPER01
             statmsg = av_asprintf("%8lu: %6.2f  %6.2f  %6.2f    %6.2f  %6.2f  %6.2f    %6.2f  %6.2f  %6.2f    %6.2f  %6.2f  %6.2f\n", \
                                   fcount, orig.vector.x, orig.vector.y, deshake->avg.vector.x, deshake->avg.vector.y, t.vector.x, t.vector.y, orig.angle, deshake->avg.angle, t.angle, orig.zoom, deshake->avg.zoom, t.zoom);
-            fwrite(statmsg, sizeof(char), strlen(statmsg), deshake->fp);
-            fflush(deshake->fp);
 #else
             statmsg = av_asprintf("          %6.2f  %6.2f  %6.2f    %6.2f  %6.2f  %6.2f    %6.2f  %6.2f  %6.2f    %6.2f  %6.2f  %6.2f\n", \
                                   orig.vector.x, orig.vector.y, deshake->avg.vector.x, deshake->avg.vector.y, t.vector.x, t.vector.y, orig.angle, deshake->avg.angle, t.angle, orig.zoom, deshake->avg.zoom, t.zoom);
-            fwrite(statmsg, sizeof(char), strlen(statmsg), deshake->fp);
 #endif
+            fwrite(statmsg, sizeof(char), strlen(statmsg), deshake->fp);
             av_freep(&statmsg);
         }
 
@@ -646,19 +580,19 @@ static av_cold int init(AVFilterContext *ctx, const char *args, void *opaque)
     deshake->av_class = &deshake_class;  // Find out why this "discards pointer qualifiers"
     av_opt_set_defaults(deshake);
 
-    if (strncmp(args,"opts=",5)) {
-        argstring = NULL;
-        if ((err = (av_set_options_string(deshake, args, "=", ":"))) < 0) {
-            av_log(ctx, AV_LOG_ERROR, "Error parsing options string: '%s'\n", args);
-            return err;
-        }
-        deshake->extra.optmask = (deshake->extra.s_optmask ? strtoull(deshake->extra.s_optmask,NULL,0) : 0);
-        if (deshake->extra.search_area){
-            sscanf(deshake->extra.search_area, "%d:%d:%d:%d",
-                   &deshake->cx, &deshake->cy, &deshake->cw, &deshake->ch);
+    if (args) {
+        if (strncmp(args,"opts=",5)) {
+            argstring = NULL;
+            if ((err = (av_set_options_string(deshake, args, "=", ":"))) < 0) {
+                av_log(ctx, AV_LOG_ERROR, "Error parsing options string: '%s'\n", args);
+                return err;
+            }
+            deshake->extra.optmask = (deshake->extra.s_optmask ? strtoull(deshake->extra.s_optmask,NULL,0) : 0);
+        } else {
+            argstring = args+5;
         }
     } else {
-        argstring = args+5;
+        argstring = NULL;
     }
 #  else /* ifdef USE_AVOPTION */
 
@@ -714,10 +648,7 @@ static av_cold int init(AVFilterContext *ctx, const char *args, void *opaque)
             statmsg = av_asprintf("          %7s %7s %7s   %7s %7s %7s   %7s %7s %7s   %7s %7s %7s\n\n",
                                   "Or x", "Or y", "Av x", "Av y", "Fin x", "Fin y", "Or ang", "Av ang", "Fin ang", "Or zm", "Av zm", "Fin zm");
             fwrite(statmsg, sizeof(char), strlen(statmsg), deshake->fp);
-#ifdef EXPER01
-            fflush(deshake->fp);
-#endif
-            av_free(statmsg);
+            av_freep(&statmsg);
         } else {
             av_log(deshake,AV_LOG_ERROR,"Failed to open stat file %s: %s\n", LOGFILE, strerror(errno));
         }

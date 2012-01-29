@@ -14,7 +14,7 @@
 ////////// HELLO
 
 #include "transform.h"
-#include "libavutil/exper01.h"     // EXPER01
+#include "libavutil/exper01.h"
 #include "libavfilter/vf_deshake.h"
 
 /** @name Special development-support functions
@@ -49,14 +49,13 @@ void find_motion_generate_block_vectors(DeshakeContext *deshake, int x, int y, i
                 arrow->starty = arrow->block_y + deshake->blocksize/2;
                 if (OPTMASK(OPT_BLOCK_VECTORS_NORMALIZE)) {
                     MotionVector tmv = { (double)mv->x, (double)mv->y};
-                    double n;
-                    if ((n = FFMIN(FFABS(tmv.x), FFABS(tmv.y))) && n < 8) {
-                        tmv.x *= 8/n;
-                        tmv.y *= 8/n;
-                    }
-                    if ((n = FFMAX(FFABS(tmv.x),FFABS(tmv.y))) && n > FFMAX(deshake->blocksize - 2,0)) {
-                        tmv.x *= (deshake->blocksize-2)/n;  // Leave a little breathing room
-                        tmv.y *= (deshake->blocksize-2)/n;
+                    double n = 0;
+                    if ( ( (n = FFMIN(FFABS(tmv.x), FFABS(tmv.y))) && deshake->blocksize/2) ||
+                            (n = FFMAX(FFABS(tmv.x),FFABS(tmv.y))) && n > FFMAX(deshake->blocksize - 2,0)) {
+                        if ((deshake->blocksize -2) && (n /= (deshake->blocksize -2))) {
+                            tmv.x /= n;
+                            tmv.y /= n;
+                        }
                     }
                     arrow->endx = arrow->startx + (int)tmv.x;
                     arrow->endy = arrow->starty + (int)tmv.y;
@@ -64,27 +63,17 @@ void find_motion_generate_block_vectors(DeshakeContext *deshake, int x, int y, i
                     arrow->endx = arrow->startx + mv->x;
                     arrow->endy = arrow->starty + mv->y;
                 }
-                if (fuss && (mv->x || mv->y)) {
-//                                   av_log(deshake,AV_LOG_ERROR,"%s %d: fx=%f, fy=%f, x=%d, mv->x=%d, deshake->rx=%d, startx=%d,  endx=%d, y=%d, mv->y=%d, deshake->ry=%d, starty=%d, endy=%d\n",
-//                                          __func__,__LINE__, 0, 0, x, mv->x, deshake->rx, arrow->startx, arrow->endx, y, mv->y, deshake->ry, arrow->starty, arrow->endy);
-                    fuss--;
-                }
                 arrow->count = counts[mv->x + deshake->rx][mv->y + deshake->ry];
                 arrow->highlight = 0;
                 arrow->next = NULL;
                 arrow->annotation = av_asprintf("%d %d %d %d counts=%d", x, y, mv->x, mv->y, counts[mv->x + deshake->rx][mv->y + deshake->ry]);
                 arrow_index=0;
                 for (a2 = &arrow_root ; *a2  ; a2 = &(*a2)->next, arrow_index++) {
-                    if (OPTMASK(OPT_LOG_BLOCK_VECTORS_INNER_LOOP)) {
-//                                        av_log(deshake,AV_LOG_ERROR,"%s %d: index=%d a2 = %p  *a2 = %p  (*a2)->next = %p  arrow_root is at %p  arrow_root = %p  x = %4d  y = %4d  mv->x = %4d  mv->y = %4d  ...rx = %4d  ...ry = %4d\n",
-                        av_log(deshake,AV_LOG_ERROR,"%s %d: index=%2d  x=%3d  y=%3d  mv->x=%2d  mv->y=%2d  rx=%3d  ry=%3d\n",
+                    LOG_IF_OPTMASK(OPT_LOG_BLOCK_VECTORS_INNER_LOOP, deshake,AV_LOG_ERROR,"%s %d: index=%2d  x=%3d  y=%3d  mv->x=%2d  mv->y=%2d  rx=%3d  ry=%3d\n",
                                __func__, __LINE__, ((*a2)? (*a2)->index : -1), /* a2, *a2, ((*a2)? (*a2)->next : NULL),  &arrow_root, arrow_root, */ x, y, mv->x, mv->y, deshake->rx, deshake->ry);
-                    }
                 }
-                if (OPTMASK(OPT_LOG_BLOCK_VECTORS_LOOP_FINAL)) {
-                    av_log(deshake,AV_LOG_ERROR,"%s %d: arw.index=%2d start=%3d,%3d end=%3d,%3d count=%3d x=%3d y=%3d mv->x=%3d mv->y=%3d rx=%3d ry=%3d) annotation=\"%s\"\n",
+                LOG_IF_OPTMASK(OPT_LOG_BLOCK_VECTORS_LOOP_FINAL, deshake,AV_LOG_ERROR,"%s %d: arw.index=%2d start=%3d,%3d end=%3d,%3d count=%3d x=%3d y=%3d mv->x=%3d mv->y=%3d rx=%3d ry=%3d) annotation=\"%s\"\n",
                            __func__,__LINE__,arrow_index, arrow->startx, arrow->starty, arrow->endx, arrow->endy, arrow->count, x, y, mv->x, mv->y, deshake->rx, deshake->ry,  arrow->annotation);
-                }
                 arrow->index = arrow_index;
                 (*a2) = arrow;
             } else {
@@ -181,12 +170,10 @@ static void draw_vectors(DeshakeContext *deshake, AVFilterBufferRef *avbuf, int 
         static int fuss = 10;
         if (fuss || OPTMASK(OPT_FLOAT_04)) {
             static unsigned long frame = 0;
-            if (OPTMASK(OPT_FLOAT_03)) {
-                av_log(deshake,AV_LOG_ERROR,"%s %4d: %6lu: orig x=%4d, orig y=%4d, avg x=%4d, avg y=%4d, final x=%4d, final y=%4d fcount =%6lu  icount =%6lu\n",
+            LOG_IF_OPTMASK(OPT_FLOAT_03, deshake,AV_LOG_ERROR,"%s %4d: %6lu: orig x=%4d, orig y=%4d, avg x=%4d, avg y=%4d, final x=%4d, final y=%4d fcount =%6lu  icount =%6lu\n",
                        __func__,__LINE__,frame,
                        final_vector_params[1][0], final_vector_params[1][1], final_vector_params[0][0], final_vector_params[0][1],
                        final_vector_params[2][0], final_vector_params[2][1], fcount, icount);
-            }
             fuss--;
             frame++;
         }

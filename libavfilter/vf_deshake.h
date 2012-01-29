@@ -12,73 +12,34 @@
 #  define LOGFILE filename
 #endif
 
-/** name search area limits
- * Limits and default of user option for the search area
+/** @name Parameter defaults and user-option limits
  * @{ */
-#define SEARCH_AREA_DEFAULT  "-1:-1:-1:-1" ///< not right here
-/** @} */
-/** @name rxry
- *  Limits and default of user option for the maximum extent of movement in x and y directions
- *  @{*/
-#define RX_DEFAULT         (16)
-#define RX_MAX             (63)
-#define RX_MIN             (0)
-#define RY_DEFAULT         (16)
-#define RY_MAX             (64)
-#define RY_MIN             (0)
-/** @}*/
-/** default of user option for the method to fill image areas vacated by tranformation */
-#define FILL_DEFAULT       (FILL_MIRROR)
-/** @name blocksize
- *  Limits and default of user option for motion-search blocksize.
- *  @note Existing code sets this at 8, but the man page says 4.
- *  @{*/
-#define BLOCKSIZE_DEFAULT  (8)
-#define BLOCKSIZE_MAX      (128)
-#define BLOCKSIZE_MIN      (8)
-/** @}*/
-/** @name contrast
- * Limits and default of user option for the minimum contrast a block must have to be considered for motion estimation.
- *  @{*/
-#define CONTRAST_DEFAULT   (125)
-#define CONTRAST_MAX       (255)
-#define CONTRAST_MIN       (1)
-/** @}*/
-/** Default search type; see man page for details. */
-#define SEARCH_DEFAULT     (EXHAUSTIVE)
-/** @name alpha.
- *  Limits and default of user option for alpha value for exponential average.
- *  A negative value leaves existing default based on the number of reference frames. (New, for test, may not stay.)
- *  @{*/
-#define ALPHA_DEFAULT      (-1.0)
-#define ALPHA_MAX          (0.99)
-#define ALPHA_MIN          (0.01)
-/** @}*/
-/** @name Interpolation methods.
- * @{ */
+#define RX_DEFAULT         (16)  ///< X-axis search extent default
+#define RX_MAX             (63)  ///< X-axis search extent max
+#define RX_MIN             (0)   ///< X-axis search extent min
+#define RY_DEFAULT         (16)  ///< Y-axis search extent default
+#define RY_MAX             (64)  ///< Y-axis search extent max
+#define RY_MIN             (0)   ///< Y-axis search extent min
+#define FILL_DEFAULT       (FILL_MIRROR)  ///< Default fill method
+#define BLOCKSIZE_DEFAULT  (8)    ///<  Default block size
+#define BLOCKSIZE_MAX      (128)  ///< Max block size
+#define BLOCKSIZE_MIN      (8)    ///< Min block size
+#define CONTRAST_DEFAULT   (125)  ///< Contrast threshold default
+#define CONTRAST_MAX       (255)  ///< Contrast threshold max
+#define CONTRAST_MIN       (1)    ///< Contrast threshold min
+#define SEARCH_DEFAULT     (EXHAUSTIVE)  ///< Default search type
 #define INTERPOLATE_METHOD_LUMA           (deshake->extra.interpolate_luma)
 #define INTERPOLATE_METHOD_CHROMA         (deshake->extra.interpolate_chroma)
-#define INTERP_LUMA_DEFAULT               (INTERPOLATE_DEFAULT)
-#define INTERP_CHROMA_DEFAULT             (INTERPOLATE_DEFAULT)
-/** @} */
-/** @name diff limit.
- * Maximum diff from SAD before a seach is considered failed
- * @{ */
-#define DIFF_LIMIT_DEFAULT     (512)
-#define DIFF_LIMIT_MIN         (INT_MIN)
-#define DIFF_LIMIT_MAX         (INT_MAX)
-/** @} */
-/** @name reference frames
- * Number of reference frames to use in exponential average calculation
- * @{ */
-#define REFERENCE_FRAMES_DEFAULT (20)
+#define INTERP_LUMA_DEFAULT               (INTERPOLATE_DEFAULT)  ///< Default interpolation, luma
+#define INTERP_CHROMA_DEFAULT             (INTERPOLATE_DEFAULT)  ///< Default interpolation, chroma
+#define DIFF_LIMIT_DEFAULT     (512)      ///< Default limit for SAD diff returns
+#define DIFF_LIMIT_MIN         (INT_MIN)  ///< Min limit for SAD diff returns
+#define DIFF_LIMIT_MAX         (INT_MAX)  ///< Max limit for SAD diff returns
+#define REFERENCE_FRAMES_DEFAULT (20)     ///< Default number of reference frames for average
 /** @} */
 
-/** @name Macros to obtain the dimensions of the chroma planes
-    @{*/
 #define CHROMA_HEIGHT(link) -((-link->h) >> av_pix_fmt_descriptors[link->format].log2_chroma_h)
 #define CHROMA_WIDTH(link)  -((-link->w) >> av_pix_fmt_descriptors[link->format].log2_chroma_w)
-/** @}*/
 
 /** Options for motion searches. */
 enum SearchMethod {
@@ -147,12 +108,12 @@ typedef struct {
     AVClass av_class;
 #endif
 // In same order as option string; easier debugging that way.
-    int cx;
+    int cx;                    ///< cx, cy, cw, ch: Restrict motion search to this area
     int cy;
-    int cw;                    ///< Crop motion search to this box
+    int cw;
     int ch;
-    int rx;                    ///< Maximum horizontal shift
-    int ry;                    ///< Maximum vertical shift
+    int rx;                    ///< Horizontal search extent
+    int ry;                    ///< Vertical search extent
     enum FillMethod edge;      ///< Edge fill method
     int blocksize;             ///< Size of blocks to compare
     int contrast;              ///< Contrast threshold
@@ -173,7 +134,7 @@ typedef struct {
 //void draw_vectors(DeshakeContext *deshake, AVFilterBufferRef *avbuf, int w, int h, int stride, Transform *t, Transform *orig, int normalizing_scale, int color, int highlight_color);
 void do_vectors(DeshakeContext *deshake, AVFilterLink *link, Transform *t, Transform *orig);
 void find_motion_generate_block_vectors(DeshakeContext *deshake, int x, int y, int (*counts)[BLOCKSIZE_MAX], IntMotionVector *mv);
-int block_contrast(uint8_t *src, int x, int y, int stride, int blocksize, DeshakeContext *deshake);
+int DEF_ADD_DESHAKE(block_contrast,uint8_t *src, int x, int y, int stride, int blocksize);
 /** Root of linked list of vector arrows to draw.
  * @see draw_vectors() */
 extern ArrowAnnotation *arrow_root;

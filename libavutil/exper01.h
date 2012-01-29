@@ -17,6 +17,30 @@
 #include "libavfilter/avfilter.h"
 #include "libavutil/avassert.h"
 
+/** @name Macros for test hacks.
+ * These are intended to avoid the plethora of ifdef/endifs
+ * for test alterations, to keep test logging, including logging
+ * controlled by the option mask, on a single line, and
+ * to produce the original code when EXPER01 is not defined.
+ * @{*/
+#ifdef EXPER01
+# define LOG_IF(cond,ctx,level,fmt,...)            \
+    do { if (cond) {                               \
+        av_log(ctx, level, fmt, ##__VA_ARGS__);      \
+        }} while(0)                                    ///< Produce the log message if the condtion is met and EXPER01 is defined.
+#  define LOG_IF_OPTMASK(opt,ctx,level,fmt,...) LOG_IF(OPTMASK(opt), ctx, level, fmt, ##__VA_ARGS__)  ///< Shortcut for optmask cases.
+#  define CALL_ADD_DESHAKE(func,...) func(deshake, ##__VA_ARGS__)                 ///< Adds the deshake parameter to function calls
+#  define DEF_ADD_DESHAKE(func,...) func(DeshakeContext *deshake, ##__VA_ARGS__) ///< Adds the deshake parameter to prototypes and defintions.
+#  define PARAM_IF(if_exper01,if_not) (if_exper01)
+#else
+#  define LOG_IF(cond, ctx, level, fmt, ...) do{}while(0)          ///< If EXPER01 is not defined
+#  define LOG_IF_OPTMASK(opt, ctx, level, fmt, ...) do{}while(0)   ///< If EXPER01 is not defined
+#  define LOG_ADD_DESHAKE(func,...) func(__VA_ARGS__)              ///< If EXPER01 is not defined
+#  define DEF_ADD_DESHAKE(func,...) func(##__VA_ARGS__)            ///< If EXPER01 is not defined
+#  define PARAM_IF(if_exper01,if_not) (if_not)
+#endif
+/** @} */
+
 /**
  * Draw a line on the image in the specified buffer, for now, simply plane 0;
  * @param avbuf Reference to the image buffer

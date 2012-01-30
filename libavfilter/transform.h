@@ -71,20 +71,20 @@ enum FillMethod {
 };
 
 /**
- * Get an affine transformation matrix from a given translation, rotation, and
- * zoom factor. The matrix will look like:
+ * Get an affine transformation matrix from a given translation and rotation.
+ *
+ * The matrix will look like:
  *
  * [ zoom * cos(angle),           -sin(angle),     x_shift,
- *          sin(angle),     zoom * cos(angle),     y_shift,
+ *          sin(angle),            cos(angle),     y_shift,
  *                   0,                     0,           1 ]
  *
  * @param x_shift horizontal translation
  * @param y_shift vertical translation
  * @param angle   rotation in radians
- * @param zoom    scale percent (1.0 = 100%)
  * @param matrix  9-item affine transformation matrix
  */
-void avfilter_get_matrix(float x_shift, float y_shift, float angle, float zoom, float *matrix);
+void avfilter_get_matrix(float x_shift, float y_shift, float angle, float *matrix);
 
 /**
  * Add two matrices together. result = m1 + m2.

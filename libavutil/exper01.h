@@ -2,7 +2,9 @@
 #define _EXPER01_H__
 
 /**
- * @file  Sundry goodies for my experimentation
+ * @file
+ *
+ *  Sundry goodies for my experimentation
  *
  * An exciting collection of wondrous things-or something like that.
  */
@@ -54,8 +56,8 @@
  * @param color TBDescribed
  * @note For now, simply draws on plane 0.  Later on, fancy color jazz is planned.
  */
-void exper01_draw_line(AVFilterBufferRef *avbuf, int f_sx, int f_sy, int f_ex, int f_ey,
-                       int f_w, int f_h, int f_stride, int f_color);
+void exper01_draw_line(AVFilterBufferRef *avbuf, int sx, int sy, int ex, int ey,
+                       int w, int h, int stride, int color);
 
 /**
  * Draw an arrow on the image in the specified buffer, for now, simply plane 0;
@@ -70,8 +72,8 @@ void exper01_draw_line(AVFilterBufferRef *avbuf, int f_sx, int f_sy, int f_ex, i
  * @param color TBDescribed
  * @note For now, simply draws on plane 0.  Later on, fancy color jazz is planned.
  */
-void exper01_draw_arrow(AVFilterBufferRef *avbuf, int f_sx, int f_sy, int f_ex, int f_ey,
-                        int f_w, int f_h, int f_stride, int f_color);
+void exper01_draw_arrow(AVFilterBufferRef *avbuf, int sx, int sy, int ex, int ey,
+                        int w, int h, int stride, int color);
 
 enum opt_select { OPT_NULL_TRANSFORM,
                   OPT_BLANK_FRAME,
@@ -132,11 +134,9 @@ extern int global_option_03;
 extern int global_option_04;
 
 #ifdef EXPER01
-#  define DESHAKE_ZOOM (deshake->extra.zoom)
 #  define DESHAKE_WINNING_COUNT (deshake->extra.winning_count)
 #  define DESHAKE_WINNING_MV (deshake->extra.imvs[0])
 #else
-#  define DESHAKE_ZOOM
 #  define DESHAKE_WINNING_COUNT
 #  define DESHAKE_WINNING_MV
 #endif
@@ -157,15 +157,11 @@ typedef struct {
     int                 n_valid_imvs;     /** Number of valid motion vectors in invs                     */
     int                 winning_count;    /** The count found in find_motion that is chosen for the gmv  */
     struct timeval      tvs[16];          /** Timevals for general use; first is reserved for the time track functions. */
-    float               zoom;             /** substitute zoom for test                                   */
     int                 diff_limit;       /** Maximum diff from SAD that can still be accepted           */
     char               *logfile;          /** Optional log file                                          */
     char               *oldopts;          /** Option string when user chooses old style                  */
     int                 interpolate_luma, interpolate_chroma; /** Interpolation methods */
 } DeshakeContextExtra;
-
-//extern u_int64_t dummy_optmask;
-//extern int dummy_zoom;
 
 /**
  * Descriptor for an arrow.

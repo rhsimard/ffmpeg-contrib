@@ -67,12 +67,10 @@ typedef struct {
  *
  * Describes a transform performed, or which could be performed, by the deshake
  * filter on a frame.
- * @todo Research needed into the workings of the zoom value.
  */
 typedef struct {
     MotionVector vector;  /** X and Y shifts       */
     double angle;         /** Rotation             */
-    double zoom;          /** Zoom percentage      */
 } Transform;
 
 /** @name Transform struct macros.
@@ -86,7 +84,6 @@ typedef struct {
         dest.vector.x op src.vector.x;          \
         dest.vector.y op src.vector.y;          \
         dest.angle    op src.angle;             \
-        dest.zoom     op src.zoom;              \
     } while(0)
 
 /** Scalars */
@@ -95,7 +92,6 @@ typedef struct {
         dest.vector.x op val;                   \
         dest.vector.y op val;                   \
         dest.angle    op val;                   \
-        dest.zoom     op val;                   \
     } while(0)
 /** @}*/
 

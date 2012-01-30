@@ -117,29 +117,18 @@ INTERPOLATE_METHOD(interpolate_biquadratic)
     y'         sin(a)     cos(a)      y_shift         y
     1          0          0           1               1
     *
-    Zoom:                  x'         zoom_x     0           0               x
-    y'         0          zoom_y      0               y
-    1          0          0           1               1
-    where zoom_x = zoom_y = zoom
-    =
 
-    x'         cos(a) * zoom_x  -  sin(a) * 0  +  x_shift * 0      |    cos(a) * 0  -  sin(a)   *  zoom_y    +   x_shift * 0       |   cos(a)  * 0  -  sin(a) * 0   + x_shift   * 1
-    y'         sin(a) * zoom_x  +  cos(a) * 0  +  x_shift * 0      |    sin(a) * 0  +  cos(a)   *  zoom_y    +   y_shift * 0       |   sin(a)  * 0  +  cos(a) * 0   + y_shift   * 1
-    1          0      * zoom_x  +  0      * 0  +  1       * 0      |    0      * 0  +  0        *  zoom_y    +   1       * 0       |   0       * 0  +  0      * 0   + 1         * 1
+    x'         cos(a)  -  sin(a) * 0  +  x_shift * 0      |    cos(a) * 0  -  sin(a)    +   x_shift * 0       |   cos(a)  * 0  -  sin(a) * 0   + x_shift   * 1
+    y'         sin(a)  +  cos(a) * 0  +  x_shift * 0      |    sin(a) * 0  +  cos(a)    +   y_shift * 0       |   sin(a)  * 0  +  cos(a) * 0   + y_shift   * 1
+    1          0       +  0      * 0  +  1       * 0      |    0      * 0  +  0         +   1       * 0       |   0       * 0  +  0      * 0   + 1         * 1
     =
-    x'         cos(a) * zoom_x       -sin(a) * zoom_y       x_shift       x
-    y'         sin(a) * zoom_x        cos(a) * zoom_y       y_shift       y
-    1          0                      0                     1             1
-    Is this right? It doesn't agree with the code.
-    x'         cos(a) * zoom_x       -sin(a) * zoom_y       x_shift       x
-    y'         sin(a) * zoom_x        cos(a) * zoom_y       y_shift       y
-    1          0                      0                     1             1
-
+    x'         cos(a)       -sin(a)       x_shift       x
+    y'         sin(a)        cos(a)       y_shift       y
+    1          0             0            1             1
 */
 
-void avfilter_get_matrix(float x_shift, float y_shift, float angle, float zoom, float *matrix) {
-    // Can't zoom here if the result of the transform will become the next reference frame!
-    matrix[0] =  cos(angle) /* * zoom */;
+void avfilter_get_matrix(float x_shift, float y_shift, float angle, float *matrix) {
+    matrix[0] =  cos(angle);
     matrix[1] = -sin(angle);
     matrix[2] =  x_shift;
     matrix[3] = -matrix[1];

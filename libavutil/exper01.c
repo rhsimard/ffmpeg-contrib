@@ -59,27 +59,13 @@ OptmaskSelection optmask_selections[] =
 
 static int n_optmask_selections = sizeof(optmask_selections)/sizeof(OptmaskSelection);
 
+/** @name Cheesy way to get a new option in quickly.
+ * @{ */
 int global_option_01;
 int global_option_02;
 int global_option_03;
 int global_option_04;
-
-#if 0
-/**
- * Draw a line from (ex, ey) -> (sx, sy).
- * @param avbuf reference to the buffer on which to draw
- * @param w width of the image
- * @param h height of the image
- * @param stride stride/linesize of the image
- * @param color color of the arrow
- * @todo  Change color arg to packed RGB levels; handle all pix formats.
- * @todo  Shadow/background
- * @todo  Draw modes: add, invert, solid, etc.
- * @todo  Styles: dashed, dotted, solid, similar to CSS.
- * @note  This is a highly efficient algorithm, using only addition, subtraction,
- * increment and comparison operations in the drawing loop.
- */
-#endif
+/** @}*/
 
 void exper01_draw_line(AVFilterBufferRef *avbuf, int sx, int sy, int ex, int ey,
                        int w, int h, int stride, int color)
@@ -141,32 +127,23 @@ void exper01_draw_line(AVFilterBufferRef *avbuf, int sx, int sy, int ex, int ey,
     }
 }
 
-#if 0
-/**
- * Draw an arrow from (ex, ey) -> (sx, sy).
- * @param avbuf reference to the buffer on which to draw
- * @param w width of the image
- * @param h height of the image
- * @param stride stride/linesize of the image
- * @param color color of the arrow
- * @note Stolen from libavcodec/mpegvideo.c
- */
-#endif
-
-void exper01_draw_arrow(AVFilterBufferRef *avbuf, int sx, int sy, int ex,
-                        int ey, int w, int h, int stride, int color)
+void exper01_draw_arrow(AVFilterBufferRef *avbuf, int sx, int sy, int ex, int ey,
+                       int w, int h, int stride, int color)
 {
-    int dx,dy;
-
 #define ARROWHEAD_SIZE (3)
 
-    int sxm = sx-1, sym = sy+1, exm=ex-1, eym=ey+1, rx, ry, length=0;
+    int sxm, sym, exm, eym, dx, dy, rx, ry, length = 0;
 
     sx = av_clip(sx, 2, w-2);
     sy = av_clip(sy, 2, h-2);
     ex = av_clip(ex, 2, w-2);
     ey = av_clip(ey, 2, h-2);
     color = av_clip(color,0,255);
+
+    sxm = sx -1;
+    sym = sy +1;
+    exm = ex -1;
+    eym = ey +1;
 
     dx = ex - sx;
     dy = ey - sy;

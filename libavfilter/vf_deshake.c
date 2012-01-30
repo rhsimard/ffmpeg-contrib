@@ -40,7 +40,6 @@
  *   - Fill frame edges based on previous/next reference frames
  *   - Fill frame edges by stretching image near the edges?
  *       - Can this be done quickly and look decent?
- *   - Near term: Investigate and implement as appropriate the zoom feature.
  *
  * Dark Shikari links to http://wiki.videolan.org/SoC_x264_2010#GPU_Motion_Estimation_2
  * for an algorithm similar to what could be used here to get the gmv
@@ -81,7 +80,6 @@ static const AVOption deshake_options[]= {
     {"filename"      , "optional log file"            , OFFSET(extra.logfile)           , AV_OPT_TYPE_STRING, {.str=NULL                     },  CHAR_MIN, CHAR_MAX             },
     /* The following are newly-added items for test. */
     {"optmask"       , "option bitmask"               , OFFSET(extra.s_optmask)         , AV_OPT_TYPE_STRING, {.str=NULL                     },  CHAR_MIN, CHAR_MAX             },
-    {"zoom"          , "test zoom factor"             , OFFSET(extra.zoom)              , AV_OPT_TYPE_FLOAT,  {.dbl=1.0                      },  0.0, 1000000.0                 },
     {"ref-frames"    , "subst. reference frame count" , OFFSET(reference_frames)        , AV_OPT_TYPE_INT,    {.dbl=REFERENCE_FRAMES_DEFAULT },  0, INT_MAX                     },
     {"diff-limit"    , "largest SAD diff"             , OFFSET(extra.diff_limit)        , AV_OPT_TYPE_INT,    {.dbl=DIFF_LIMIT_DEFAULT       },  DIFF_LIMIT_MIN, DIFF_LIMIT_MAX },
     {"interp-luma"   , "interpolation method, luma"   , OFFSET(extra.interpolate_luma)  , AV_OPT_TYPE_INT,    {.dbl=INTERP_LUMA_DEFAULT      },  0, INTERPOLATE_COUNT -1        },
@@ -143,7 +141,6 @@ double clean_mean(double *values, int count)
  * @param x, y Location of the block
  * @param stride Distance within the data from one line to the next]
  * @param blocksize Size of the block
- * @param deshake Description of this instance of the filter
  * @return Calculated contrast value
  * @todo Check on the possibility that MMX could help here.
  */
@@ -433,21 +430,20 @@ static void end_frame(AVFilterLink *link)
         }
         ADDTIME("find motion done","\n");
         orig = t;   // Copy transform so we can output it later to compare to the smoothed value
-        LOG_IF_OPTMASK(OPT_LOG_POST_FIND_MOTION_01, deshake,AV_LOG_ERROR,"%s %d: %8lu: %f %f %f   %f %f %f   %f %f %f   %f %f %f\n", \
-                   __func__,__LINE__, fcount, orig.vector.x, deshake->avg.vector.x, t.vector.x, orig.vector.y, deshake->avg.vector.y, t.vector.y, orig.angle, deshake->avg.angle, t.angle, orig.zoom, deshake->avg.zoom, t.zoom);
+        LOG_IF_OPTMASK(OPT_LOG_POST_FIND_MOTION_01, deshake,AV_LOG_ERROR,"%s %d: %8lu: %f %f %f   %f %f %f   %f %f %f\n", \
+                   __func__,__LINE__, fcount, orig.vector.x, deshake->avg.vector.x, t.vector.x, orig.vector.y, deshake->avg.vector.y, t.vector.y, orig.angle, deshake->avg.angle, t.angle);
         // Generate a one-sided moving exponential average
         deshake->avg.vector.x = alpha * t.vector.x + (1.0 - alpha) * deshake->avg.vector.x;
         deshake->avg.vector.y = alpha * t.vector.y + (1.0 - alpha) * deshake->avg.vector.y;
         deshake->avg.angle = alpha * t.angle + (1.0 - alpha) * deshake->avg.angle;
-        deshake->avg.zoom = alpha * t.zoom + (1.0 - alpha) * deshake->avg.zoom;
 
 #if defined(EXPER01)
         start.x = deshake->avg.vector.x;  // Arrows: store current points before transform.
         start.y = deshake->avg.vector.y;
         end.x = t.vector.x;
         end.y = t.vector.y;
-        LOG_IF_OPTMASK(OPT_LOG_POST_FIND_MOTION_01, deshake,AV_LOG_ERROR,"%s %d: %8lu: %f %f %f   %f %f %f   %f %f %f   %f %f %f\n", \
-                   __func__,__LINE__, fcount, orig.vector.x, deshake->avg.vector.x, t.vector.x, orig.vector.y, deshake->avg.vector.y, t.vector.y, orig.angle, deshake->avg.angle, t.angle, orig.zoom, deshake->avg.zoom, t.zoom);
+        LOG_IF_OPTMASK(OPT_LOG_POST_FIND_MOTION_01, deshake,AV_LOG_ERROR,"%s %d: %8lu: %f %f %f   %f %f %f   %f %f %f\n", \
+                   __func__,__LINE__, fcount, orig.vector.x, deshake->avg.vector.x, t.vector.x, orig.vector.y, deshake->avg.vector.y, t.vector.y, orig.angle, deshake->avg.angle, t.angle);
 #endif
         T_OP(t,-=,deshake->avg);  // Remove the average from the current motion to detect the motion that is not on purpose, just as jitter from bumping the camera
 
@@ -458,11 +454,11 @@ static void end_frame(AVFilterLink *link)
         // Write statistics to file if requested.
         if (deshake->fp) {
 #ifdef EXPER01
-            statmsg = av_asprintf("%8lu: %6.2f  %6.2f  %6.2f    %6.2f  %6.2f  %6.2f    %6.2f  %6.2f  %6.2f    %6.2f  %6.2f  %6.2f\n", \
-                                  fcount, orig.vector.x, orig.vector.y, deshake->avg.vector.x, deshake->avg.vector.y, t.vector.x, t.vector.y, orig.angle, deshake->avg.angle, t.angle, orig.zoom, deshake->avg.zoom, t.zoom);
+            statmsg = av_asprintf("%8lu: %6.2f  %6.2f  %6.2f    %6.2f  %6.2f  %6.2f    %6.2f  %6.2f  %6.2f\n", \
+                                  fcount, orig.vector.x, orig.vector.y, deshake->avg.vector.x, deshake->avg.vector.y, t.vector.x, t.vector.y, orig.angle, deshake->avg.angle, t.angle);
 #else
-            statmsg = av_asprintf("          %6.2f  %6.2f  %6.2f    %6.2f  %6.2f  %6.2f    %6.2f  %6.2f  %6.2f    %6.2f  %6.2f  %6.2f\n", \
-                                  orig.vector.x, orig.vector.y, deshake->avg.vector.x, deshake->avg.vector.y, t.vector.x, t.vector.y, orig.angle, deshake->avg.angle, t.angle, orig.zoom, deshake->avg.zoom, t.zoom);
+            statmsg = av_asprintf("          %6.2f  %6.2f  %6.2f    %6.2f  %6.2f  %6.2f    %6.2f  %6.2f  %6.2f\n", \
+                                  orig.vector.x, orig.vector.y, deshake->avg.vector.x, deshake->avg.vector.y, t.vector.x, t.vector.y, orig.angle, deshake->avg.angle, t.angle);
 #endif
             fwrite(statmsg, sizeof(char), strlen(statmsg), deshake->fp);
             av_freep(&statmsg);
@@ -479,12 +475,12 @@ static void end_frame(AVFilterLink *link)
 
 #ifdef EXPER01
         // Generate a luma transformation matrix
-        avfilter_get_matrix(t.vector.x, t.vector.y, t.angle, 1.0 + t.zoom / 100.0, matrix);
+        avfilter_get_matrix(t.vector.x, t.vector.y, t.angle, matrix);
         // Transform the luma plane
         ADDTIME("before luma transform","\n");
         avfilter_transform(current_frame_data, out->data[0], in->linesize[0], out->linesize[0], link->w, link->h, matrix, 0, INTERPOLATE_METHOD_LUMA, deshake->edge, &deshake->extra);
         // Generate a chroma transformation matrix
-        avfilter_get_matrix(t.vector.x / (link->w / CHROMA_WIDTH(link)), t.vector.y / (link->h / CHROMA_HEIGHT(link)), t.angle, 1.0 + t.zoom / 100.0, matrix);
+        avfilter_get_matrix(t.vector.x / (link->w / CHROMA_WIDTH(link)), t.vector.y / (link->h / CHROMA_HEIGHT(link)), t.angle, matrix);
         // Transform the chroma planes
         ADDTIME("before chroma transform","1");
         avfilter_transform(in->data[1], out->data[1], in->linesize[1], out->linesize[1], CHROMA_WIDTH(link), CHROMA_HEIGHT(link), matrix, 127, INTERPOLATE_METHOD_CHROMA, deshake->edge, &deshake->extra);
@@ -494,11 +490,11 @@ static void end_frame(AVFilterLink *link)
         ADDTIME("final processing","\n");
 #else
         // Generate a luma transformation matrix
-        avfilter_get_matrix(t.vector.x, t.vector.y, t.angle, 1.0 + t.zoom / 100.0, matrix);
+        avfilter_get_matrix(t.vector.x, t.vector.y, t.angle, matrix);
         // Transform the luma plane
         avfilter_transform(current_frame_data, out->data[0], in->linesize[0], out->linesize[0], link->w, link->h, matrix, 0, INTERPOLATE_BILINEAR, deshake->edge);
         // Generate a chroma transformation matrix
-        avfilter_get_matrix(t.vector.x / (link->w / CHROMA_WIDTH(link)), t.vector.y / (link->h / CHROMA_HEIGHT(link)), t.angle, 1.0 + t.zoom / 100.0, matrix);
+        avfilter_get_matrix(t.vector.x / (link->w / CHROMA_WIDTH(link)), t.vector.y / (link->h / CHROMA_HEIGHT(link)), t.angle, matrix);
         // Transform the chroma planes
         avfilter_transform(in->data[1], out->data[1], in->linesize[1], out->linesize[1], CHROMA_WIDTH(link), CHROMA_HEIGHT(link), matrix, 127, INTERPOLATE_BILINEAR, deshake->edge);
         avfilter_transform(in->data[2], out->data[2], in->linesize[2], out->linesize[2], CHROMA_WIDTH(link), CHROMA_HEIGHT(link), matrix, 127, INTERPOLATE_BILINEAR, deshake->edge);
@@ -612,10 +608,10 @@ static av_cold int init(AVFilterContext *ctx, const char *args, void *opaque)
     if (argstring && *argstring) {
 #ifdef EXPER01
         int nconv;
-        nconv = sscanf(argstring, "%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%f:%Li:%255s",
+        nconv = sscanf(argstring, "%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%Li:%255s",
                        &deshake->cx, &deshake->cy, &deshake->cw, &deshake->ch,
                        &deshake->rx, &deshake->ry, (int *)&deshake->edge,
-                       &deshake->blocksize, &deshake->contrast, (int *)&deshake->search, &DESHAKE_ZOOM, (long long int*)&deshake->extra.optmask, filename);
+                       &deshake->blocksize, &deshake->contrast, (int *)&deshake->search, (long long int*)&deshake->extra.optmask, filename);
         global_option_01 = OPTMASK(OPT_GLOBAL_01);
         global_option_02 = OPTMASK(OPT_GLOBAL_02);
 #  ifdef USE_AVOPTION
@@ -659,9 +655,9 @@ static av_cold int init(AVFilterContext *ctx, const char *args, void *opaque)
 
 #ifdef EXPER01
     p_32_01 = (u_int32_t*)&deshake->extra.optmask;
-    av_log(ctx, AV_LOG_INFO, "cx: %d, cy: %d, cw: %d, ch: %d, rx: %d, ry: %d, edge: %d blocksize: %d contrast: %d search: %d  zoom: %f  option mask: 0x%08lx %08lx  ref frames: %d  diff-limit: %d  interp: %d,%d%s%s\n",
+    av_log(ctx, AV_LOG_INFO, "cx: %d, cy: %d, cw: %d, ch: %d, rx: %d, ry: %d, edge: %d blocksize: %d contrast: %d search: %d  option mask: 0x%08lx %08lx  ref frames: %d  diff-limit: %d  interp: %d,%d%s%s\n",
            deshake->cx, deshake->cy, deshake->cw, deshake->ch,
-           deshake->rx, deshake->ry, deshake->edge, deshake->blocksize * 2, deshake->contrast, deshake->search, DESHAKE_ZOOM,
+           deshake->rx, deshake->ry, deshake->edge, deshake->blocksize * 2, deshake->contrast, deshake->search,
            (unsigned long)p_32_01[1], (unsigned long)p_32_01[0], deshake->reference_frames, deshake->extra.diff_limit, deshake->extra.interpolate_luma, deshake->extra.interpolate_chroma,
            (deshake->extra.logfile && *deshake->extra.logfile? "  log file: " : " oh "), (deshake->extra.logfile && *deshake->extra.logfile? deshake->extra.logfile : " no "));
     if (deshake->extra.optmask) {

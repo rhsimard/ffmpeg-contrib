@@ -1,0 +1,10 @@
+b:v=5990k
+maxrate=6000k
+bufsize=1792k
+qmax=8
+qmin=1
+g=15
+acodec=mp2
+b:a=224k
+ar=48k
+ac=2

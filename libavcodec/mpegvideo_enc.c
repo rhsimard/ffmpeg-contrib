@@ -88,7 +88,7 @@ void ff_convert_matrix(DSPContext *dsp, int (*qmat)[64],
                  * (1 << 36) / 19952 >= (1 << 36) / (x) >= (1 << 36) / 249205026
                  *           3444240 >= (1 << 36) / (x) >= 275 */
 
-                av_assert0(qscale);  // Otherwise, lookie what happens next...
+                av_assert0(qscale != 0);  //Temporary measure: -qmin 0  means qscale will be zero here (ouch!).
                 qmat[qscale][i] = (int)((UINT64_C(1) << QMAT_SHIFT) /
                                         (qscale * quant_matrix[j]));
             }
@@ -105,7 +105,7 @@ void ff_convert_matrix(DSPContext *dsp, int (*qmat)[64],
                  * (1 << 36) / 19952 >= (1 << 36) / (x) >= (1 << 36) / 249205026
                  *           3444240 >= (1 << 36) / (x) >= 275 */
 
-                av_assert0(qscale);  // Like above...
+                av_assert0(qscale != 0);  //Temporary measure: -qmin 0  means qscale will be zero here (ouch!).
                 qmat[qscale][i] = (int)((UINT64_C(1) << (QMAT_SHIFT + 14)) /
                                         (ff_aanscales[i] * qscale * quant_matrix[j]));
             }
@@ -117,7 +117,8 @@ void ff_convert_matrix(DSPContext *dsp, int (*qmat)[64],
                  * So             16 <=              x  <= 7905
                  * so (1 << 19) / 16 >= (1 << 19) / (x) >= (1 << 19) / 7905
                  * so          32768 >= (1 << 19) / (x) >= 67 */
-                av_assert0(qscale != 0);  // Like above...
+
+                av_assert0(qscale != 0);  //Temporary measure: -qmin 0  means qscale will be zero here (ouch!).
                 qmat[qscale][i] = (int)((UINT64_C(1) << QMAT_SHIFT) /
                                         (qscale * quant_matrix[j]));
                 //qmat  [qscale][i] = (1 << QMAT_SHIFT_MMX) /

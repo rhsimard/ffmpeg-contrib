@@ -75,9 +75,9 @@ enum FillMethod {
  *
  * The matrix will look like:
  *
- * [ zoom * cos(angle),           -sin(angle),     x_shift,
+ *          cos(angle),           -sin(angle),     x_shift,
  *          sin(angle),            cos(angle),     y_shift,
- *                   0,                     0,           1 ]
+ *                   0,                     0,           1
  *
  * @param x_shift horizontal translation
  * @param y_shift vertical translation

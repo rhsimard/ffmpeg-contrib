@@ -176,7 +176,7 @@ int opt_exper01_options(const char *opt, const char *arg)
     int i;
     u_int32_t *p32;
 
-    printf("Options: %s\n","x:y:w:h:rx:ry:edge:blocksize:contrast:search:zoom:option-mask:alpha:filename");
+    printf("Options: %s\n","x:y:w:h:rx:ry:edge:blocksize:contrast:search:option-mask:alpha:filename");
     printf("Option mask:\n");
     for (i = 0 ; i < sizeof(optmask_selections)/sizeof(OptmaskSelection) ; i++) {
         OptmaskSelection *os = &optmask_selections[i];

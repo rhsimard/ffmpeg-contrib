@@ -28,15 +28,6 @@
 #include "libavutil/exper01.h"
 #include "transform.h"
 
-#if 0
-#  define SAFE_SUBSCRIPT(ys,xs,sstride)                                 \
-    (((subscript = (int)(ys) * (sstride) + (int)(xs)) >= size)?         \
-     av_log(NULL,AV_LOG_ERROR,"%s %s %d: Subscript out of range: %d  (width=%d height=%d)\n", __FILE__, __func__, __LINE__, subscript, width, height), 0 \
-     : subscript)
-#else
-#  define SAFE_SUBSCRIPT(ys,xs,sstride) ((int)(ys) * (sstride) + (int)(xs))
-#endif
-
 #define INTERPOLATE_METHOD(name)                                        \
     static uint8_t name(float x, float y, const uint8_t *src,           \
                         int width, int height, int stride, uint8_t def)
@@ -209,12 +200,12 @@ void avfilter_transform(const uint8_t *src, uint8_t *dst,
             case FILL_CLAMP:
                 y_s = av_clipf(y_s, 0, height - 1);
                 x_s = av_clipf(x_s, 0, width - 1);
-                def = src[SAFE_SUBSCRIPT(y_s, x_s, src_stride)];
+                def = src[(int)(y_s) * (src_stride) + (int)(x_s)];
                 break;
             case FILL_MIRROR:
                 y_s = (y_s < 0) ? -y_s : (y_s >= height) ? (height + height - y_s) : y_s;
                 x_s = (x_s < 0) ? -x_s : (x_s >= width) ? (width + width - x_s) : x_s;
-                def = src[SAFE_SUBSCRIPT(y_s, x_s, src_stride)];
+                def = src[(int)(y_s) * (src_stride) + (int)(x_s)];
                 break;
             }
 #ifdef EXPER01

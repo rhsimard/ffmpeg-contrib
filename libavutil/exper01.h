@@ -31,14 +31,16 @@
         av_log(ctx, level, fmt, ##__VA_ARGS__);      \
         }} while(0)                                    ///< Produce the log message if the condtion is met and EXPER01 is defined.
 #  define LOG_IF_OPTMASK(opt,ctx,level,fmt,...) LOG_IF(OPTMASK(opt), ctx, level, fmt, ##__VA_ARGS__)  ///< Shortcut for optmask cases.
+#  define CALL_IF(func,...) func(__VA_ARGS__)         ///< Ordinary function call
 #  define CALL_ADD_DESHAKE(func,...) func(deshake, ##__VA_ARGS__)                 ///< Adds the deshake parameter to function calls
-#  define DEF_ADD_DESHAKE(func,...) func(DeshakeContext *deshake, ##__VA_ARGS__) ///< Adds the deshake parameter to prototypes and defintions.
+/* Don't use this; messes up doxygen. #  define DEF_ADD_DESHAKE(func,...) func(DeshakeContext *deshake, ##__VA_ARGS__) /  /  / < Adds the deshake parameter to prototypes and defintions. */
 #  define PARAM_IF(if_exper01,if_not) (if_exper01)
 #else
 #  define LOG_IF(cond, ctx, level, fmt, ...) do{}while(0)          ///< If EXPER01 is not defined
 #  define LOG_IF_OPTMASK(opt, ctx, level, fmt, ...) do{}while(0)   ///< If EXPER01 is not defined
-#  define LOG_ADD_DESHAKE(func,...) func(__VA_ARGS__)              ///< If EXPER01 is not defined
-#  define DEF_ADD_DESHAKE(func,...) func(##__VA_ARGS__)            ///< If EXPER01 is not defined
+#  define CALL_IF(func,...) do{}while(0)                           ///< If EXPER01 is not defined
+#  define CALL_ADD_DESHAKE(func,...) func(__VA_ARGS__)             ///< If EXPER01 is not defined
+/* #  define DEF_ADD_DESHAKE(func,...) func(##__VA_ARGS__)   */
 #  define PARAM_IF(if_exper01,if_not) (if_not)
 #endif
 /** @} */

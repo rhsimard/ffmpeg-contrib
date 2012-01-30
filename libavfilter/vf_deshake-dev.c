@@ -25,6 +25,8 @@
 #include "libavutil/exper01.h"
 #include "libavfilter/vf_deshake.h"
 
+#ifdef EXPER01
+
 ArrowAnnotation *arrow_root = NULL;
 static void draw_vectors_r(DeshakeContext *deshake, const ArrowAnnotation *root, AVFilterBufferRef *avbuf, int w, int h, int stride, int normalizing_scale, int color, int highlight_color);
 static void draw_vectors(DeshakeContext *deshake, AVFilterBufferRef *avbuf, int w, int h, int stride, Transform *t, Transform *orig, int normalizing_scale, int color, int highlight_color);
@@ -215,3 +217,4 @@ static void draw_vectors_r(DeshakeContext *deshake, const ArrowAnnotation *root,
         av_free(root);
     }
 }
+#endif

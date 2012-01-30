@@ -144,7 +144,11 @@ double clean_mean(double *values, int count)
  * @return Calculated contrast value
  * @todo Check on the possibility that MMX could help here.
  */
-int DEF_ADD_DESHAKE(block_contrast, uint8_t *src, int x, int y, int stride, int blocksize)
+#ifdef EXPER01
+int block_contrast(DeshakeContext *deshake, uint8_t *src, int x, int y, int stride, int blocksize)
+#else
+static int block_contrast(uint8_t *src, int x, int y, int stride, int blocksize)
+#endif
 {
     int highest = 0;
     int lowest = 0;
@@ -336,7 +340,7 @@ static void find_motion(DeshakeContext *deshake, uint8_t *src1, uint8_t *src2,
                     }
                     center_x += mv.x;
                     center_y += mv.y;
-                    CALL_ADD_DESHAKE(find_motion_generate_block_vectors, x, y, counts, &mv);
+                    CALL_IF(find_motion_generate_block_vectors, deshake, x, y, counts, &mv);
                 }
             }
         }
@@ -600,7 +604,6 @@ static av_cold int init(AVFilterContext *ctx, const char *args, void *opaque)
 
 #else  /* ifdef EXPER01 */
 
-    char filename[PATH_MAX] = {0};
     INIT_DEFAULTS();
 
 #endif    /* if(n)def EXPER01 */

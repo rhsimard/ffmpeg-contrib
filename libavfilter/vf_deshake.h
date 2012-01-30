@@ -131,14 +131,12 @@ typedef struct {
 //void draw_vectors(DeshakeContext *deshake, AVFilterBufferRef *avbuf, int w, int h, int stride, Transform *t, Transform *orig, int normalizing_scale, int color, int highlight_color);
 void do_vectors(DeshakeContext *deshake, AVFilterLink *link, Transform *t, Transform *orig);
 void find_motion_generate_block_vectors(DeshakeContext *deshake, int x, int y, int (*counts)[BLOCKSIZE_MAX], IntMotionVector *mv);
-int DEF_ADD_DESHAKE(block_contrast,uint8_t *src, int x, int y, int stride, int blocksize);
+int block_contrast(DeshakeContext *deshake, uint8_t *src, int x, int y, int stride, int blocksize);
 /** Root of linked list of vector arrows to draw.
  * @see draw_vectors() */
 extern ArrowAnnotation *arrow_root;
 extern unsigned long fcount;
 extern unsigned long icount;
-#else
-static int block_contrast(uint8_t *src, int x, int y, int stride, int blocksize);
 #endif
 
 double block_angle(int x, int y, int cx, int cy, IntMotionVector *shift);

@@ -208,15 +208,16 @@ double block_angle(int x, int y, int cx, int cy, IntMotionVector *shift)
  * Search uses SAD methods (sum of absolute differences) to try to identify
  * areas which have moved.
  *
- * @param deshake Instance description
- * @param src1,src2 Data for the frames frame (luma plane)
- * @param bx, by Location of the block
- * @param stride Size of the data for one line within the data buffers
- * @param mv Motion vector struct to receive the results.
- * @see   libavcodec/dsputil.c and related files.
+ * @param deshake             Instance description
+ * @param reference_frame     Luma plane data for the revious frame against which we're looking for motion
+ * @param current_frame       Luma frame data for the frame we're analyzing
+ * @param bx, by              Location of the block
+ * @param stride              Size of the data within the data buffers for one line
+ * @param mv                  Motion vector struct to receive the results.
+ * @see                       libavcodec/dsputil.c and related files.
  */
-static void find_block_motion(DeshakeContext *deshake, uint8_t *src1,
-                              uint8_t *src2, int bx, int by, int stride,
+static void find_block_motion(DeshakeContext *deshake, uint8_t *reference_frame,
+                              uint8_t *current_frame, int bx, int by, int stride,
                               IntMotionVector *mv)
 {
     int x, y;
@@ -225,8 +226,8 @@ static void find_block_motion(DeshakeContext *deshake, uint8_t *src1,
     int tmp, tmp2;
 
 /** Call the previously-determined SAD routine to look for block displacements. */
-#define CMP(i, j) deshake->c.sad[0](deshake, src1 + by * stride + bx,   \
-                                    src2 + (j) * stride + (i), stride,  \
+#define CMP(i, j) deshake->c.sad[0](deshake, reference_frame + by * stride + bx,   \
+                                    current_frame + (j) * stride + (i), stride,  \
                                     deshake->blocksize)
 
     if (deshake->search == EXHAUSTIVE) {
@@ -292,14 +293,16 @@ static void find_block_motion(DeshakeContext *deshake, uint8_t *src1,
  * same as the motion of most blocks in the frame, so if most blocks
  * move one pixel to the right and two pixels down, this would yield a
  * motion vector (1, -2).
- * @param deshake Description of this instance
- * @param src1, src2  Frame data for comparison (luma plane)
- * @param width, height Dimensions of the images
- * @param stride Distance within the data buffer from one line to the next
- * @param t Transform struct to hold data for affine transform to be performed
+ *
+ * @param deshake             Instance description
+ * @param reference_frame     Luma plane data for the revious frame against which we're looking for motion
+ * @param current_frame       Luma frame data for the frame we're analyzing
+ * @param width, height       Dimensions of the frames
+ * @param stride              Size of the data within the data buffers for one line
+ * @param t                   Transform struct to hold data for affine transform to be performed
  */
 
-static void find_motion(DeshakeContext *deshake, uint8_t *src1, uint8_t *src2,
+static void find_motion(DeshakeContext *deshake, uint8_t *reference_frame, uint8_t *current_frame,
                         int width, int height, int stride, Transform *t)
 {
     IntMotionVector mv = {0};
@@ -317,12 +320,12 @@ static void find_motion(DeshakeContext *deshake, uint8_t *src1, uint8_t *src2,
         // We use a width of 16 here to match the libavcodec SAD functions
         for (x = deshake->rx; x < width - deshake->rx - 16; x += 16) {
             // If the contrast is too low, just skip this block as it probably won't be very useful to us.
-            contrast = CALL_ADD_DESHAKE(block_contrast, src2, x, y, stride, deshake->blocksize);
+            contrast = CALL_ADD_DESHAKE(block_contrast, current_frame, x, y, stride, deshake->blocksize);
             if (contrast > deshake->contrast) {
-                LOG_IF_OPTMASK(OPT_LOG_CALL_FIND_BLOCK_MOTION, deshake,AV_LOG_ERROR,"%s %d: (fcount =%3lu) calling find_block_motion:  x=%3d   y=%3d   stride=%3d   (contrast=%3d, src1 = %p, src2 = %p)\n",
-                           __func__,__LINE__, fcount, x, y, stride, contrast, src1, src2);
+                LOG_IF_OPTMASK(OPT_LOG_CALL_FIND_BLOCK_MOTION, deshake,AV_LOG_ERROR,"%s %d: (fcount =%3lu) calling find_block_motion:  x=%3d   y=%3d   stride=%3d   (contrast=%3d, reference_frame = %p, current_frame = %p)\n",
+                           __func__,__LINE__, fcount, x, y, stride, contrast, reference_frame, current_frame);
                 ADDTIME("find_block_motion call","x = %d  y = %d\n", x, y);
-                find_block_motion(deshake, src1, src2, x, y, stride, &mv);
+                find_block_motion(deshake, reference_frame, current_frame, x, y, stride, &mv);
                 if (mv.x != -1 && mv.y != -1) {
                     LOG_IF_OPTMASK(OPT_LOG_CALL_FIND_BLOCK_MOTION, NULL,AV_LOG_ERROR,"mv returns %d, %d\n", mv.x, mv.y);
                     if ((n = ++counts[mv.x + deshake->rx][mv.y + deshake->ry]) > count_max_value) {

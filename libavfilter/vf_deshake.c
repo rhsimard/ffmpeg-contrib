@@ -80,7 +80,7 @@ static const AVOption deshake_options[]= {
     {"filename"      , "optional log file"            , OFFSET(extra.logfile)           , AV_OPT_TYPE_STRING, {.str=NULL                     },  CHAR_MIN, CHAR_MAX             },
     /* The following are newly-added items for test. */
     {"optmask"       , "option bitmask"               , OFFSET(extra.s_optmask)         , AV_OPT_TYPE_STRING, {.str=NULL                     },  CHAR_MIN, CHAR_MAX             },
-    {"ref-frames"    , "subst. reference frame count" , OFFSET(reference_frames)        , AV_OPT_TYPE_INT,    {.dbl=REFERENCE_FRAMES_DEFAULT },  0, INT_MAX                     },
+    {"ref-frames"    , "subst. reference frame count" , OFFSET(reference_frames)        , AV_OPT_TYPE_INT,    {.dbl=REFERENCE_FRAMES_DEFAULT },  1, INT_MAX                     },
     {"diff-limit"    , "largest SAD diff"             , OFFSET(extra.diff_limit)        , AV_OPT_TYPE_INT,    {.dbl=DIFF_LIMIT_DEFAULT       },  DIFF_LIMIT_MIN, DIFF_LIMIT_MAX },
     {"interp-luma"   , "interpolation method, luma"   , OFFSET(extra.interpolate_luma)  , AV_OPT_TYPE_INT,    {.dbl=INTERP_LUMA_DEFAULT      },  0, INTERPOLATE_COUNT -1        },
     {"interp-chroma" , "interpolation method, chroma" , OFFSET(extra.interpolate_chroma), AV_OPT_TYPE_INT,    {.dbl=INTERP_CHROMA_DEFAULT    },  0, INTERPOLATE_COUNT -1        },

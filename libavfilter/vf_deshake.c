@@ -461,7 +461,7 @@ static void end_frame(AVFilterLink *link)
         // Write statistics to file if requested.
         if (deshake->fp) {
 #ifdef EXPER01
-            statmsg = av_asprintf("%8lu: %6.2f  %6.2f  %6.2f    %6.2f  %6.2f  %6.2f    %6.2f  %6.2f  %6.2f\n", \
+            statmsg = av_asprintf("%8lu: %6.2f  %6.2f  %6.2f   %6.2f  %6.2f  %6.2f   %6.2f  %6.2f  %6.2f\n", \
                                   fcount, orig.vector.x, orig.vector.y, deshake->avg.vector.x, deshake->avg.vector.y, t.vector.x, t.vector.y, orig.angle, deshake->avg.angle, t.angle);
 #else
             statmsg = av_asprintf("          %6.2f  %6.2f  %6.2f    %6.2f  %6.2f  %6.2f    %6.2f  %6.2f  %6.2f\n", \
@@ -643,8 +643,8 @@ static av_cold int init(AVFilterContext *ctx, const char *args, void *opaque)
     deshake->blocksize /= 2;
     if (LOGFILE && *LOGFILE) {
         if ((deshake->fp = fopen(LOGFILE, "w")) != NULL) {
-            statmsg = av_asprintf("          %7s %7s %7s   %7s %7s %7s   %7s %7s %7s   %7s %7s %7s\n\n",
-                                  "Or x", "Or y", "Av x", "Av y", "Fin x", "Fin y", "Or ang", "Av ang", "Fin ang", "Or zm", "Av zm", "Fin zm");
+            statmsg = av_asprintf("          %7s %7s %7s   %7s %7s %7s   %7s %7s %7s\n\n",
+                                 "Or x", "Or y", "Av x", "Av y", "Fin x", "Fin y", "Or ang", "Av ang", "Fin ang");
             fwrite(statmsg, sizeof(char), strlen(statmsg), deshake->fp);
             av_freep(&statmsg);
         } else {
@@ -661,7 +661,7 @@ static av_cold int init(AVFilterContext *ctx, const char *args, void *opaque)
 
 #ifdef EXPER01
     p_32_01 = (u_int32_t*)&deshake->extra.optmask;
-    av_log(ctx, AV_LOG_INFO, "cx: %d, cy: %d, cw: %d, ch: %d, rx: %d, ry: %d, edge: %d blocksize: %d contrast: %d search: %d  option mask: 0x%08lx %08lx  ref frames: %d  diff-limit: %d  interp: %d,%d%s%s\n",
+    av_log(ctx, AV_LOG_INFO, "cx: %d  cy: %d  cw: %d  ch: %d  rx: %d  ry: %d  edge: %d  blocksize: %d  contrast: %d  search: %d  option mask: 0x%08lx %08lx  ref frames: %d  diff-limit: %d  interpolation methods: %d,%d%s%s\n",
            deshake->cx, deshake->cy, deshake->cw, deshake->ch,
            deshake->rx, deshake->ry, deshake->edge, deshake->blocksize * 2, deshake->contrast, deshake->search,
            (unsigned long)p_32_01[1], (unsigned long)p_32_01[0], deshake->reference_frames, deshake->extra.diff_limit, deshake->extra.interpolate_luma, deshake->extra.interpolate_chroma,
